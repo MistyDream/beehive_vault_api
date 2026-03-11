@@ -1,33 +1,24 @@
-use actix_web::{App, HttpServer};
-use anyhow::{Error, Result};
+use actix_web::{App, HttpServer, web};
+use anyhow::Result;
 
 use crate::config::settings;
-
 use crate::infrastructure::http::routes::configure_routes;
+use crate::infrastructure::http::state::AppState;
 
-pub async fn run() -> Result<()> {
-    let server = settings::load_config()?.server;
+pub async fn run(state: AppState) -> Result<()> {
+    let server_config = &settings::get().server;
+    let app_state = web::Data::new(state);
 
     let app = move || {
         App::new()
+            .app_data(app_state.clone())
             .configure(configure_routes)
     };
 
     HttpServer::new(app)
-    .bind((server.host, server.port))?
-    .run()
-    .await
-    .map_err(Error::from)
+        .bind((server_config.host.as_str(), server_config.port))?
+        .run()
+        .await?;
+
+    Ok(())
 }
-
-// mod routes {
-//     use actix_web::{web, HttpResponse};
-
-//     pub fn init(cfg: &mut web::ServiceConfig) {
-//         cfg.route("/", web::get().to(health_check));
-//     }
-
-//     async fn health_check() -> HttpResponse {
-//         HttpResponse::Ok().json("Server is running!")
-//     }
-// }
