@@ -1,16 +1,26 @@
+use garde::Validate;
 use serde::Deserialize;
 
 use crate::domain::market::stock::NewStock;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
+#[garde(context(()))]
 pub struct CreateStockRequest {
+    #[garde(length(min = 1, max = 8))]
     pub symbol: String,
+    #[garde(length(min = 1, max = 120))]
     pub name: String,
+    #[garde(pattern(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$"))]
     pub isin: String,
+    #[garde(length(max = 10))]
     pub currency: Option<String>,
+    #[garde(length(max = 50))]
     pub market: Option<String>,
+    #[garde(length(max = 50))]
     pub sector: Option<String>,
+    #[garde(length(max = 50))]
     pub industry: Option<String>,
+    #[garde(length(max = 8))]
     pub country: Option<String>,
 }
 
