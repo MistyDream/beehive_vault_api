@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 
-use crate::domain::market::stock::Stock;
+use crate::domain::market::stock::{NewStock, Stock};
 use crate::schema::stocks;
 
 #[derive(Queryable, Selectable)]
@@ -20,15 +20,30 @@ pub struct StockRow {
 
 #[derive(Insertable)]
 #[diesel(table_name = stocks)]
-pub struct NewStockRow<'a> {
-    pub symbol: &'a str,
-    pub name: &'a str,
-    pub isin: &'a str,
-    pub currency: Option<&'a str>,
-    pub market: Option<&'a str>,
-    pub sector: Option<&'a str>,
-    pub industry: Option<&'a str>,
-    pub country: Option<&'a str>,
+pub struct NewStockRow {
+    pub symbol: String,
+    pub name: String,
+    pub isin: String,
+    pub currency: Option<String>,
+    pub market: Option<String>,
+    pub sector: Option<String>,
+    pub industry: Option<String>,
+    pub country: Option<String>,
+}
+
+impl From<NewStock> for NewStockRow {
+    fn from(s: NewStock) -> Self {
+        NewStockRow {
+            symbol: s.symbol,
+            name: s.name,
+            isin: s.isin,
+            currency: s.currency,
+            market: s.market,
+            sector: s.sector,
+            industry: s.industry,
+            country: s.country,
+        }
+    }
 }
 
 impl From<StockRow> for Stock {

@@ -12,3 +12,14 @@ pub struct Stock {
     pub industry: Option<String>,
     pub country: Option<String>,
 }
+
+pub struct NewStock {
+    pub symbol: String,
+    pub name: String,
+    pub isin: String,
+    pub currency: Option<String>,
+    pub market: Option<String>,
+    pub sector: Option<String>,
+    pub industry: Option<String>,
+    pub country: Option<String>,
+}
