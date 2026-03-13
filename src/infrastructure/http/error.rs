@@ -1,4 +1,6 @@
-use actix_web::{HttpResponse, ResponseError, http::StatusCode};
+use actix_web::{HttpRequest, HttpResponse, ResponseError, http::StatusCode};
+use actix_web::error::InternalError;
+use garde_actix_web::error::Error as GardeError;
 
 use crate::application::error::AppError;
 use crate::infrastructure::http::dto::response::error_response::{FieldError, ProblemDetail};
@@ -10,6 +12,29 @@ pub enum ApiError {
 
     #[error("Validation failed")]
     Validation(Vec<FieldError>),
+
+    #[error("Invalid request body")]
+    BadRequest(String),
+}
+
+pub fn garde_error_handler(err: GardeError, _req: &HttpRequest) -> actix_web::Error {
+    let api_error = match err {
+        GardeError::ValidationError(report) => {
+            let fields: Vec<FieldError> = report
+                .iter()
+                .map(|(path, error)| FieldError {
+                    field: path.to_string(),
+                    message: error.to_string(),
+                })
+                .collect();
+            ApiError::Validation(fields)
+        }
+        GardeError::JsonPayloadError(e) => ApiError::BadRequest(e.to_string()),
+        other => ApiError::BadRequest(other.to_string()),
+    };
+
+    let response = api_error.error_response();
+    InternalError::from_response(api_error, response).into()
 }
 
 impl ResponseError for ApiError {
@@ -20,6 +45,7 @@ impl ResponseError for ApiError {
                 AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -41,6 +67,11 @@ impl ResponseError for ApiError {
                 "Validation Error".to_string(),
                 Some("One or more fields are invalid".to_string()),
                 Some(fields.clone()),
+            ),
+            ApiError::BadRequest(msg) => (
+                "Bad Request".to_string(),
+                Some(msg.clone()),
+                None,
             ),
         };
 
