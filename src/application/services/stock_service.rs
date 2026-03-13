@@ -16,4 +16,8 @@ impl StockService {
     pub async fn create_stock(&self, new: NewStock) -> Result<Stock, AppError> {
         self.repo.insert(new).await
     }
+
+    pub async fn get_stock_by_isin(&self, isin: String) -> Result<Stock, AppError> {
+        self.repo.find_by_isin(isin).await
+    }
 }

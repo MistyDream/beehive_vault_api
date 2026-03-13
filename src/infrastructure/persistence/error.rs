@@ -19,6 +19,10 @@ impl From<DbError> for AppError {
     fn from(err: DbError) -> Self {
         match &err {
             DbError::Diesel(diesel::result::Error::NotFound) => AppError::NotFound,
+            DbError::Diesel(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                info,
+            )) => AppError::Conflict(info.message().to_string()),
             _ => AppError::Internal(Box::new(err)),
         }
     }

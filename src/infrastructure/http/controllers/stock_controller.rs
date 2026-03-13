@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, post, web};
+use actix_web::{HttpResponse, get, post, web};
 use garde_actix_web::web::Json;
 
 use crate::domain::market::stock::NewStock;
@@ -17,6 +17,18 @@ pub async fn create_stock(
     let stock = state.stock_service.create_stock(new_stock).await?;
 
     Ok(HttpResponse::Created()
-        .insert_header(("Location", format!("/stocks/{}", stock.id)))
+        .insert_header(("Location", format!("/stocks/{}", stock.isin)))
         .json(StockResponse::from(stock)))
+}
+
+#[get("/stocks/{isin}")]
+pub async fn get_stock(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let isin = path.into_inner();
+
+    let stock = state.stock_service.get_stock_by_isin(isin).await?;
+
+    Ok(HttpResponse::Ok().json(StockResponse::from(stock)))
 }
