@@ -1,8 +1,10 @@
 use actix_web::{HttpResponse, get, post, web};
 use garde_actix_web::web::Json;
 
-use crate::domain::market::stock::NewStock;
+use crate::domain::market::stock::{NewStock, StockFilter};
+use crate::infrastructure::http::dto::request::list_stocks_query::ListStocksQuery;
 use crate::infrastructure::http::dto::request::stock_request::CreateStockRequest;
+use crate::infrastructure::http::dto::response::paginated_response::PaginatedResponse;
 use crate::infrastructure::http::dto::response::stock_response::StockResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
@@ -19,6 +21,18 @@ pub async fn create_stock(
     Ok(HttpResponse::Created()
         .insert_header(("Location", format!("/stocks/{}", stock.isin)))
         .json(StockResponse::from(stock)))
+}
+
+#[get("/stocks")]
+pub async fn list_stocks(
+    state: web::Data<AppState>,
+    query: web::Query<ListStocksQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let filter = StockFilter::from(query.into_inner());
+
+    let result = state.stock_service.search_stocks(filter).await?;
+
+    Ok(HttpResponse::Ok().json(PaginatedResponse::<StockResponse>::from(result)))
 }
 
 #[get("/stocks/{isin}")]

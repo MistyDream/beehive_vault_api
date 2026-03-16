@@ -5,7 +5,7 @@ use diesel::prelude::*;
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockRepository;
-use crate::domain::market::stock::{NewStock, Stock};
+use crate::domain::market::stock::{NewStock, Paginated, Stock, StockFilter};
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
 use crate::schema::stocks;
@@ -76,6 +76,49 @@ impl StockRepository for PgStockRepository {
                         .order(stocks::symbol.asc())
                         .load(conn)?;
                     Ok(rows.into_iter().map(Stock::from).collect())
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
+    fn search(&self, filter: StockFilter) -> Pin<Box<dyn Future<Output = Result<Paginated<Stock>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    macro_rules! apply_filters {
+                        ($query:expr) => {{
+                            let mut q = $query;
+                            if let Some(ref v) = filter.symbol { q = q.filter(stocks::symbol.ilike(format!("%{v}%"))); }
+                            if let Some(ref v) = filter.name { q = q.filter(stocks::name.ilike(format!("%{v}%"))); }
+                            if let Some(ref v) = filter.isin { q = q.filter(stocks::isin.eq(v)); }
+                            if let Some(ref v) = filter.currency { q = q.filter(stocks::currency.eq(v)); }
+                            if let Some(ref v) = filter.market { q = q.filter(stocks::market.eq(v)); }
+                            if let Some(ref v) = filter.sector { q = q.filter(stocks::sector.eq(v)); }
+                            if let Some(ref v) = filter.industry { q = q.filter(stocks::industry.eq(v)); }
+                            if let Some(ref v) = filter.country { q = q.filter(stocks::country.eq(v)); }
+                            q
+                        }};
+                    }
+
+                    let total: i64 = apply_filters!(stocks::table.into_boxed())
+                        .count()
+                        .get_result(conn)?;
+
+                    let offset = (filter.page - 1) * filter.per_page;
+                    let rows = apply_filters!(stocks::table.into_boxed())
+                        .select(StockRow::as_select())
+                        .order(stocks::symbol.asc())
+                        .limit(filter.per_page)
+                        .offset(offset)
+                        .load(conn)?;
+
+                    Ok(Paginated {
+                        data: rows.into_iter().map(Stock::from).collect(),
+                        page: filter.page,
+                        per_page: filter.per_page,
+                        total,
+                    })
                 })
                 .await
                 .map_err(AppError::from)
