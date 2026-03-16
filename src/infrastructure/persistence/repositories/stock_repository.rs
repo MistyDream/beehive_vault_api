@@ -5,9 +5,9 @@ use diesel::prelude::*;
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockRepository;
-use crate::domain::market::stock::{NewStock, Paginated, Stock, StockFilter};
+use crate::domain::market::stock::{NewStock, Paginated, Stock, StockFilter, UpdateStock};
 use crate::infrastructure::persistence::Db;
-use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
+use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow, UpdateStockRow};
 use crate::schema::stocks;
 
 #[derive(Clone)]
@@ -125,6 +125,22 @@ impl StockRepository for PgStockRepository {
         })
     }
 
+    fn update(&self, isin: String, data: UpdateStock) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+        let changeset = UpdateStockRow::from(data);
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let row = diesel::update(stocks::table.filter(stocks::isin.eq(&isin)))
+                        .set(&changeset)
+                        .returning(StockRow::as_returning())
+                        .get_result(conn)?;
+                    Ok(Stock::from(row))
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
     fn insert(&self, new: NewStock) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
         let row_data = NewStockRow::from(new);
         Box::pin(async move {
@@ -146,6 +162,19 @@ impl StockRepository for PgStockRepository {
             self.db
                 .exec(move |conn| {
                     let count = diesel::delete(stocks::table.find(stock_id)).execute(conn)?;
+                    Ok(count > 0)
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
+    fn delete_by_isin(&self, isin: String) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let count = diesel::delete(stocks::table.filter(stocks::isin.eq(&isin)))
+                        .execute(conn)?;
                     Ok(count > 0)
                 })
                 .await

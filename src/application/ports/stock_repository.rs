@@ -2,7 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use crate::application::error::AppError;
-use crate::domain::market::stock::{NewStock, Paginated, Stock, StockFilter};
+use crate::domain::market::stock::{NewStock, Paginated, Stock, StockFilter, UpdateStock};
 
 pub trait StockRepository: Send + Sync {
     fn find_by_id(&self, stock_id: i32) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
@@ -10,6 +10,8 @@ pub trait StockRepository: Send + Sync {
     fn find_by_isin(&self, isin: String) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
     fn list_all(&self) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>>;
     fn search(&self, filter: StockFilter) -> Pin<Box<dyn Future<Output = Result<Paginated<Stock>, AppError>> + Send + '_>>;
+    fn update(&self, isin: String, data: UpdateStock) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
     fn insert(&self, new: NewStock) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
     fn delete(&self, stock_id: i32) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>>;
+    fn delete_by_isin(&self, isin: String) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>>;
 }

@@ -1,9 +1,9 @@
-use actix_web::{HttpResponse, get, post, web};
+use actix_web::{HttpResponse, delete, get, post, put, web};
 use garde_actix_web::web::Json;
 
-use crate::domain::market::stock::{NewStock, StockFilter};
+use crate::domain::market::stock::{NewStock, StockFilter, UpdateStock};
 use crate::infrastructure::http::dto::request::list_stocks_query::ListStocksQuery;
-use crate::infrastructure::http::dto::request::stock_request::CreateStockRequest;
+use crate::infrastructure::http::dto::request::stock_request::{CreateStockRequest, UpdateStockRequest};
 use crate::infrastructure::http::dto::response::paginated_response::PaginatedResponse;
 use crate::infrastructure::http::dto::response::stock_response::StockResponse;
 use crate::infrastructure::http::error::ApiError;
@@ -33,6 +33,32 @@ pub async fn list_stocks(
     let result = state.stock_service.search_stocks(filter).await?;
 
     Ok(HttpResponse::Ok().json(PaginatedResponse::<StockResponse>::from(result)))
+}
+
+#[put("/stocks/{isin}")]
+pub async fn update_stock(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    body: Json<UpdateStockRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let isin = path.into_inner();
+    let data = UpdateStock::from(body.into_inner());
+
+    let stock = state.stock_service.update_stock(isin, data).await?;
+
+    Ok(HttpResponse::Ok().json(StockResponse::from(stock)))
+}
+
+#[delete("/stocks/{isin}")]
+pub async fn delete_stock(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let isin = path.into_inner();
+
+    state.stock_service.delete_stock(isin).await?;
+
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[get("/stocks/{isin}")]

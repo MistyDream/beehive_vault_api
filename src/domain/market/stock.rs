@@ -31,6 +31,16 @@ pub struct Paginated<T> {
     pub total: i64,
 }
 
+pub struct UpdateStock {
+    pub symbol: String,
+    pub name: String,
+    pub currency: Option<String>,
+    pub market: Option<String>,
+    pub sector: Option<String>,
+    pub industry: Option<String>,
+    pub country: Option<String>,
+}
+
 pub struct NewStock {
     pub symbol: String,
     pub name: String,

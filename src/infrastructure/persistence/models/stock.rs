@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 
-use crate::domain::market::stock::{NewStock, Stock};
+use crate::domain::market::stock::{NewStock, Stock, UpdateStock};
 use crate::schema::stocks;
 
 #[derive(Queryable, Selectable)]
@@ -29,6 +29,34 @@ pub struct NewStockRow {
     pub sector: Option<String>,
     pub industry: Option<String>,
     pub country: Option<String>,
+}
+
+#[derive(AsChangeset)]
+#[diesel(table_name = stocks)]
+pub struct UpdateStockRow {
+    pub symbol: String,
+    pub name: String,
+    pub currency: Option<String>,
+    pub market: Option<String>,
+    pub sector: Option<String>,
+    pub industry: Option<String>,
+    pub country: Option<String>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
+}
+
+impl From<UpdateStock> for UpdateStockRow {
+    fn from(s: UpdateStock) -> Self {
+        UpdateStockRow {
+            symbol: s.symbol,
+            name: s.name,
+            currency: s.currency,
+            market: s.market,
+            sector: s.sector,
+            industry: s.industry,
+            country: s.country,
+            updated_at: Some(chrono::Utc::now().naive_utc()),
+        }
+    }
 }
 
 impl From<NewStock> for NewStockRow {
