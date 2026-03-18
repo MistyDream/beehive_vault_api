@@ -36,7 +36,7 @@ pub async fn find_by_indicator_score(
 
 pub async fn insert(
     db: &Db,
-    new: NewIndicatorSubScoreRow<'static>,
+    new: NewIndicatorSubScoreRow,
 ) -> Result<IndicatorSubScore, DbError> {
     db.exec(move |conn| {
         let row = diesel::insert_into(indicator_sub_scores::table)
@@ -50,7 +50,7 @@ pub async fn insert(
 
 pub async fn insert_many(
     db: &Db,
-    rows: Vec<NewIndicatorSubScoreRow<'static>>,
+    rows: Vec<NewIndicatorSubScoreRow>,
 ) -> Result<Vec<IndicatorSubScore>, DbError> {
     db.exec(move |conn| {
         let inserted = diesel::insert_into(indicator_sub_scores::table)

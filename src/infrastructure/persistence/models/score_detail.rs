@@ -19,9 +19,9 @@ pub struct ScoreDetailRow {
 
 #[derive(Insertable)]
 #[diesel(table_name = score_details)]
-pub struct NewScoreDetailRow<'a> {
+pub struct NewScoreDetailRow {
     pub snapshot_id: i32,
-    pub category: &'a str,
+    pub category: String,
     pub score: f64,
     pub weight: f64,
 }

@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 
 use crate::domain::market::enums::MetricPeriod;
-use crate::domain::market::metric_value::MetricValue;
+use crate::domain::market::metric_value::{MetricValue, NewMetricValue};
 use crate::infrastructure::persistence::error::DbError;
 use crate::schema::metric_values;
 
@@ -24,16 +24,32 @@ pub struct MetricValueRow {
 
 #[derive(Insertable)]
 #[diesel(table_name = metric_values)]
-pub struct NewMetricValueRow<'a> {
+pub struct NewMetricValueRow {
     pub stock_id: i32,
-    pub metric_key: &'a str,
-    pub period: &'a str,
+    pub metric_key: String,
+    pub period: String,
     pub period_end: NaiveDate,
     pub value: f64,
-    pub unit: Option<&'a str>,
-    pub currency: Option<&'a str>,
-    pub source: &'a str,
+    pub unit: Option<String>,
+    pub currency: Option<String>,
+    pub source: String,
     pub fetched_at: NaiveDateTime,
+}
+
+impl From<NewMetricValue> for NewMetricValueRow {
+    fn from(v: NewMetricValue) -> Self {
+        NewMetricValueRow {
+            stock_id: v.stock_id,
+            metric_key: v.metric_key,
+            period: v.period,
+            period_end: v.period_end,
+            value: v.value,
+            unit: v.unit,
+            currency: v.currency,
+            source: v.source,
+            fetched_at: v.fetched_at,
+        }
+    }
 }
 
 impl TryFrom<MetricValueRow> for MetricValue {

@@ -64,11 +64,14 @@ impl ResponseError for ApiError {
                 Some(msg.clone()),
                 None,
             ),
-            ApiError::App(AppError::Internal(_)) => (
-                "Internal Server Error".to_string(),
-                None,
-                None,
-            ),
+            ApiError::App(AppError::Internal(err)) => {
+                eprintln!("[ERROR] {err}");
+                (
+                    "Internal Server Error".to_string(),
+                    None,
+                    None,
+                )
+            }
             ApiError::Validation(fields) => (
                 "Validation Error".to_string(),
                 Some("One or more fields are invalid".to_string()),

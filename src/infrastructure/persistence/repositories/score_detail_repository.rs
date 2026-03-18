@@ -45,7 +45,7 @@ pub async fn find_by_snapshot(
 /// Insert a single category score.
 pub async fn insert(
     db: &Db,
-    new: NewScoreDetailRow<'static>,
+    new: NewScoreDetailRow,
 ) -> Result<ScoreDetail, DbError> {
     db.exec(move |conn| {
         let row = diesel::insert_into(score_details::table)
@@ -60,7 +60,7 @@ pub async fn insert(
 /// Bulk insert all category scores for a snapshot (typically 6 rows at once).
 pub async fn insert_many(
     db: &Db,
-    rows: Vec<NewScoreDetailRow<'static>>,
+    rows: Vec<NewScoreDetailRow>,
 ) -> Result<Vec<ScoreDetail>, DbError> {
     db.exec(move |conn| {
         let inserted = diesel::insert_into(score_details::table)

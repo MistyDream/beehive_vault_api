@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MetricCategory {
     Valuation,
     Profitability,
     Growth,
-    Solidity,
-    ShareholderReturn,
-    Tactical,
+    FinancialHealth,
+    InvestorReturn,
 }
 
 impl MetricCategory {
@@ -17,9 +16,8 @@ impl MetricCategory {
             MetricCategory::Valuation => "valuation",
             MetricCategory::Profitability => "profitability",
             MetricCategory::Growth => "growth",
-            MetricCategory::Solidity => "solidity",
-            MetricCategory::ShareholderReturn => "shareholder_return",
-            MetricCategory::Tactical => "tactical",
+            MetricCategory::FinancialHealth => "financial_health",
+            MetricCategory::InvestorReturn => "investor_return",
         }
     }
 }
@@ -32,9 +30,8 @@ impl TryFrom<&str> for MetricCategory {
             "valuation" => Ok(MetricCategory::Valuation),
             "profitability" => Ok(MetricCategory::Profitability),
             "growth" => Ok(MetricCategory::Growth),
-            "solidity" => Ok(MetricCategory::Solidity),
-            "shareholder_return" => Ok(MetricCategory::ShareholderReturn),
-            "tactical" => Ok(MetricCategory::Tactical),
+            "financial_health" => Ok(MetricCategory::FinancialHealth),
+            "investor_return" => Ok(MetricCategory::InvestorReturn),
             other => Err(format!("unknown MetricCategory: '{other}'")),
         }
     }

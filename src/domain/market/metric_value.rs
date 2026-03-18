@@ -16,3 +16,15 @@ pub struct MetricValue {
     pub source: String,
     pub fetched_at: NaiveDateTime,
 }
+
+pub struct NewMetricValue {
+    pub stock_id: i32,
+    pub metric_key: String,
+    pub period: String,
+    pub period_end: NaiveDate,
+    pub value: f64,
+    pub unit: Option<String>,
+    pub currency: Option<String>,
+    pub source: String,
+    pub fetched_at: NaiveDateTime,
+}

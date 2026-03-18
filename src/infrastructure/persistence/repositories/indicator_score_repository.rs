@@ -33,7 +33,7 @@ pub async fn find_by_detail(db: &Db, detail_id: i32) -> Result<Vec<IndicatorScor
 
 pub async fn insert(
     db: &Db,
-    new: NewIndicatorScoreRow<'static>,
+    new: NewIndicatorScoreRow,
 ) -> Result<IndicatorScore, DbError> {
     db.exec(move |conn| {
         let row = diesel::insert_into(indicator_scores::table)
@@ -47,7 +47,7 @@ pub async fn insert(
 
 pub async fn insert_many(
     db: &Db,
-    rows: Vec<NewIndicatorScoreRow<'static>>,
+    rows: Vec<NewIndicatorScoreRow>,
 ) -> Result<Vec<IndicatorScore>, DbError> {
     db.exec(move |conn| {
         let inserted = diesel::insert_into(indicator_scores::table)

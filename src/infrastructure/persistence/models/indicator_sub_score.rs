@@ -16,9 +16,9 @@ pub struct IndicatorSubScoreRow {
 
 #[derive(Insertable)]
 #[diesel(table_name = indicator_sub_scores)]
-pub struct NewIndicatorSubScoreRow<'a> {
+pub struct NewIndicatorSubScoreRow {
     pub indicator_score_id: i32,
-    pub sub_score_type: &'a str,
+    pub sub_score_type: String,
     pub score: f64,
 }
 
