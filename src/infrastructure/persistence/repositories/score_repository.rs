@@ -68,7 +68,8 @@ impl ScoreRepository for PgScoreRepository {
                                     .returning(indicator_scores::id)
                                     .get_result(conn)?;
 
-                                let sub_scores = vec![
+                                // TODO: refactor sub-score building into a cleaner pattern
+                                let mut sub_scores = vec![
                                     NewIndicatorSubScoreRow {
                                         indicator_score_id: indicator_id,
                                         sub_score_type: "sector".to_string(),
@@ -80,6 +81,13 @@ impl ScoreRepository for PgScoreRepository {
                                         score: indicator.historical_score,
                                     },
                                 ];
+                                if let Some(abs_score) = indicator.absolute_score {
+                                    sub_scores.push(NewIndicatorSubScoreRow {
+                                        indicator_score_id: indicator_id,
+                                        sub_score_type: "absolute".to_string(),
+                                        score: abs_score,
+                                    });
+                                }
                                 diesel::insert_into(indicator_sub_scores::table)
                                     .values(&sub_scores)
                                     .execute(conn)?;

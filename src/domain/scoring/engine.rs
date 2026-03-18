@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::domain::market::enums::MetricCategory;
 
-use super::formula::compute_metric_score;
-use super::metrics::{ExtractedMetric, category_for_metric};
+use super::formula::{bracket_sub_weights, compute_bracket_score, compute_metric_score};
+use super::metrics::{ExtractedMetric, category_for_metric, brackets_for};
 
 /// Full scoring result for a stock.
 pub struct ScoringResult {
@@ -21,6 +21,7 @@ pub struct CategoryScore {
 pub struct IndicatorResult {
     pub metric_key: String,
     pub score: f64,
+    pub absolute_score: Option<f64>,
     pub sector_score: f64,
     pub historical_score: f64,
 }
@@ -43,22 +44,44 @@ fn combine_scores(sector: f64, historical: f64) -> f64 {
     (m + 0.35 * w * b).clamp(0.0, 100.0)
 }
 
+fn round2(v: f64) -> f64 {
+    (v * 100.0).round() / 100.0
+}
+
+fn score_metric(metric: &ExtractedMetric) -> IndicatorResult {
+    if let Some(brackets) = brackets_for(&metric.key) {
+        let s = compute_bracket_score(&metric.rank_data, &brackets);
+        let (w_a, w_s, w_h) = bracket_sub_weights(
+            metric.rank_data.industry_med,
+            metric.rank_data.med,
+            &brackets,
+        );
+        IndicatorResult {
+            metric_key: metric.key.clone(),
+            score: round2(s.absolute_score * w_a + s.sector_score * w_s + s.historical_score * w_h),
+            absolute_score: Some(s.absolute_score),
+            sector_score: s.sector_score,
+            historical_score: s.historical_score,
+        }
+    } else {
+        let s = compute_metric_score(&metric.rank_data, metric.higher_is_better);
+        IndicatorResult {
+            metric_key: metric.key.clone(),
+            score: round2(combine_scores(s.sector_score, s.historical_score)),
+            absolute_score: None,
+            sector_score: s.sector_score,
+            historical_score: s.historical_score,
+        }
+    }
+}
+
 /// Compute the full scoring result from extracted metrics.
-/// Uses divergence-aware combination for sector/historical and equal weights across categories.
 pub fn compute_scoring(metrics: &[ExtractedMetric]) -> ScoringResult {
     let mut by_category: HashMap<MetricCategory, Vec<IndicatorResult>> = HashMap::new();
 
     for metric in metrics {
         let Some(category) = category_for_metric(&metric.key) else { continue };
-        let scores = compute_metric_score(&metric.rank_data, metric.higher_is_better);
-        let combined = (combine_scores(scores.sector_score, scores.historical_score) * 100.0).round() / 100.0;
-
-        by_category.entry(category).or_default().push(IndicatorResult {
-            metric_key: metric.key.clone(),
-            score: combined,
-            sector_score: scores.sector_score,
-            historical_score: scores.historical_score,
-        });
+        by_category.entry(category).or_default().push(score_metric(metric));
     }
 
     let num_categories = by_category.len() as f64;
