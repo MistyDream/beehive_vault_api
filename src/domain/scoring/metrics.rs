@@ -36,6 +36,17 @@ pub fn brackets_for(key: &str) -> Option<Brackets> {
         "net_margain" => [3.0, 7.0, 12.0, 18.0],
         "FCFmargin" => [3.0, 6.0, 10.0, 16.0],
         "roa" => [2.0, 4.0, 7.0, 10.0],
+        // Financial Health (debt2ebitda descending: lower is better)
+        "interest_coverage" => [1.5, 3.0, 5.0, 8.0],
+        "debt2ebitda" => [5.0, 4.0, 3.0, 2.0],
+        "quick_ratio" => [0.6, 0.9, 1.2, 1.8],
+        "cash2debt" => [0.2, 0.5, 1.0, 2.0],
+        "equity2asset" => [0.2, 0.3, 0.4, 0.55],
+        // Investor Return (payout has custom scoring, no brackets)
+        "ForwardDividendYield" => [0.5, 1.5, 3.0, 5.0],
+        "buyback_yield" => [0.0, 1.0, 3.0, 6.0],
+        "dividend_growth_3y" => [0.0, 3.0, 6.0, 10.0],
+        "shareholder_yield" => [0.0, 2.0, 5.0, 8.0],
         _ => return None,
     };
     Some(Brackets { thresholds })

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::domain::market::enums::MetricCategory;
 
-use super::formula::{bracket_sub_weights, compute_bracket_score, compute_metric_score};
+use super::formula::{bracket_sub_weights, compute_bracket_score, compute_metric_score, compute_payout_score, payout_sub_weights};
 use super::metrics::{ExtractedMetric, category_for_metric, brackets_for};
 
 /// Full scoring result for a stock.
@@ -49,8 +49,22 @@ fn round2(v: f64) -> f64 {
 }
 
 fn score_metric(metric: &ExtractedMetric) -> IndicatorResult {
+    if metric.key == "payout" {
+        let s = compute_payout_score(&metric.rank_data);
+        let (w_a, w_s, w_h) = payout_sub_weights(
+            metric.rank_data.industry_med,
+            metric.rank_data.med,
+        );
+        return IndicatorResult {
+            metric_key: metric.key.clone(),
+            score: round2(s.absolute_score * w_a + s.sector_score * w_s + s.historical_score * w_h),
+            absolute_score: Some(s.absolute_score),
+            sector_score: s.sector_score,
+            historical_score: s.historical_score,
+        };
+    }
     if let Some(brackets) = brackets_for(&metric.key) {
-        let s = compute_bracket_score(&metric.rank_data, &brackets);
+        let s = compute_bracket_score(&metric.rank_data, &brackets, metric.higher_is_better);
         let (w_a, w_s, w_h) = bracket_sub_weights(
             metric.rank_data.industry_med,
             metric.rank_data.med,
@@ -151,5 +165,55 @@ mod tests {
     fn test_combine_zero() {
         let score = combine_scores(0.0, 0.0);
         assert!((score - 0.0).abs() < f64::EPSILON, "Zero: {score}");
+    }
+
+    #[test]
+    fn test_nvidia_investor_return() {
+        use super::super::formula::MetricRankData;
+
+        let metrics = vec![
+            ExtractedMetric {
+                key: "ForwardDividendYield".into(),
+                higher_is_better: true,
+                rank_data: MetricRankData { current: 0.03, med: 0.0, industry_med: 1.64 },
+            },
+            ExtractedMetric {
+                key: "buyback_yield".into(),
+                higher_is_better: true,
+                rank_data: MetricRankData { current: 1.13, med: 0.89, industry_med: -0.15 },
+            },
+            ExtractedMetric {
+                key: "dividend_growth_3y".into(),
+                higher_is_better: true,
+                rank_data: MetricRankData { current: 28.6, med: 14.5, industry_med: 10.2 },
+            },
+            ExtractedMetric {
+                key: "payout".into(),
+                higher_is_better: false,
+                rank_data: MetricRankData { current: 0.01, med: 0.08, industry_med: 0.375 },
+            },
+            ExtractedMetric {
+                key: "shareholder_yield".into(),
+                higher_is_better: true,
+                rank_data: MetricRankData { current: 1.18, med: 0.86, industry_med: 0.14 },
+            },
+        ];
+
+        let result = compute_scoring(&metrics);
+
+        for cat in &result.categories {
+            println!("\n{:?} — score: {:.2}", cat.category, cat.score);
+            for ind in &cat.indicators {
+                println!(
+                    "  {:25} score: {:6.2} | abs: {:>6} | sect: {:6.2} | hist: {:6.2}",
+                    ind.metric_key,
+                    ind.score,
+                    ind.absolute_score.map_or("-".into(), |v| format!("{v:.2}")),
+                    ind.sector_score,
+                    ind.historical_score,
+                );
+            }
+        }
+        println!("\nGlobal: {:.2}", result.global_score);
     }
 }

@@ -38,13 +38,24 @@ pub fn compute_metric_score(data: &MetricRankData, higher_is_better: bool) -> Me
     }
 }
 
-/// Compute the 3 sub-scores for a growth metric.
+/// Compute the 3 sub-scores for payout ratio.
+/// Absolute uses the custom payout curve; sector/historical use normalized diff (lower is better).
+pub fn compute_payout_score(data: &MetricRankData) -> BracketMetricScore {
+    BracketMetricScore {
+        absolute_score: score_payout(data.current),
+        sector_score: score_normalized_diff(data.current, data.industry_med, false),
+        historical_score: score_normalized_diff(data.current, data.med, false),
+    }
+}
+
+/// Compute the 3 sub-scores for a bracket-based metric.
 /// Uses normalized difference instead of ratio for sector/historical (handles negatives).
-pub fn compute_bracket_score(data: &MetricRankData, brackets: &Brackets) -> BracketMetricScore {
+/// For lower-is-better metrics, values are negated internally so brackets work correctly.
+pub fn compute_bracket_score(data: &MetricRankData, brackets: &Brackets, higher_is_better: bool) -> BracketMetricScore {
     BracketMetricScore {
         absolute_score: score_from_brackets(data.current, brackets),
-        sector_score: score_normalized_diff(data.current, data.industry_med),
-        historical_score: score_normalized_diff(data.current, data.med),
+        sector_score: score_normalized_diff(data.current, data.industry_med, higher_is_better),
+        historical_score: score_normalized_diff(data.current, data.med, higher_is_better),
     }
 }
 
@@ -53,9 +64,10 @@ pub fn compute_bracket_score(data: &MetricRankData, brackets: &Brackets) -> Brac
 ///
 /// d = (current - median) / (|current| + |median| + ε)
 /// score = 60 + 40·d if d >= 0, 60 + 60·d if d < 0
-fn score_normalized_diff(current: f64, median: f64) -> f64 {
+fn score_normalized_diff(current: f64, median: f64, higher_is_better: bool) -> f64 {
     let denom = current.abs() + median.abs() + 1e-9;
     let d = (current - median) / denom;
+    let d = if higher_is_better { d } else { -d };
     let score = if d >= 0.0 {
         60.0 + 40.0 * d
     } else {
@@ -71,7 +83,17 @@ fn score_normalized_diff(current: f64, median: f64) -> f64 {
 ///   floor = t0 - (t1 - t0) → score 0
 ///   ceiling = t3 + (t3 - t2) → score 100
 fn score_from_brackets(current: f64, brackets: &Brackets) -> f64 {
-    let [t0, t1, t2, t3] = brackets.thresholds;
+    let [mut t0, mut t1, mut t2, mut t3] = brackets.thresholds;
+
+    // Descending brackets (lower is better): negate everything
+    let current = if t0 > t3 {
+        let (a, b, c, d) = (-t0, -t1, -t2, -t3);
+        t0 = a; t1 = b; t2 = c; t3 = d;
+        -current
+    } else {
+        current
+    };
+
     let floor = t0 - (t1 - t0);
     let ceiling = t3 + (t3 - t2);
 
@@ -129,6 +151,50 @@ pub fn bracket_sub_weights(
     let a_w = (1.0 - s_w - h_w).max(MIN_BRACKET_WEIGHT);
 
     // Normalize to sum = 1
+    let total = a_w + s_w + h_w;
+    (a_w / total, s_w / total, h_w / total)
+}
+
+/// Custom scoring for payout ratio.
+///
+/// Payout has an optimal zone rather than "higher is better":
+///   ≤ 30% → 100 (retains most earnings)
+///   30–70% → linear 100 → 60
+///   70–100% → linear 60 → 0
+///   ≥ 100% → 0 (unsustainable)
+pub fn score_payout(value: f64) -> f64 {
+    let score = if value <= 30.0 {
+        100.0
+    } else if value <= 70.0 {
+        100.0 - (value - 30.0) / 40.0 * 40.0
+    } else if value <= 100.0 {
+        60.0 - (value - 70.0) / 30.0 * 60.0
+    } else {
+        0.0
+    };
+    (score.clamp(0.0, 100.0) * 100.0).round() / 100.0
+}
+
+/// Compute dynamic weights for payout ratio (uses score_payout instead of brackets).
+/// Same logic as bracket_sub_weights but evaluates medians with the payout curve.
+pub fn payout_sub_weights(industry_med: f64, hist_med: f64) -> (f64, f64, f64) {
+    let s_bracket = score_payout(industry_med) / 100.0;
+    let h_bracket = score_payout(hist_med) / 100.0;
+
+    let s_raw = 1.0 - s_bracket;
+    let h_raw = 1.0 - h_bracket;
+    let sh_sum = (s_raw + h_raw).max(1e-9);
+
+    let sh_total = MIN_BRACKET_WEIGHT * 2.0
+        + (1.0 - 3.0 * MIN_BRACKET_WEIGHT) * (sh_sum / 2.0);
+
+    let mut s_w = sh_total * s_raw / sh_sum;
+    let mut h_w = sh_total * h_raw / sh_sum;
+
+    s_w = s_w.max(MIN_BRACKET_WEIGHT);
+    h_w = h_w.max(MIN_BRACKET_WEIGHT);
+    let a_w = (1.0 - s_w - h_w).max(MIN_BRACKET_WEIGHT);
+
     let total = a_w + s_w + h_w;
     (a_w / total, s_w / total, h_w / total)
 }
@@ -254,49 +320,49 @@ mod tests {
     // Normalized diff tests (growth sector/historical)
     #[test]
     fn test_normdiff_at_median() {
-        let score = score_normalized_diff(10.0, 10.0);
+        let score = score_normalized_diff(10.0, 10.0, true);
         assert!((score - 60.0).abs() < 0.1, "at median: {score}");
     }
 
     #[test]
     fn test_normdiff_nvidia_vs_negative_sector() {
         // current=97.9, median=-1.5 → huge positive, score ~100
-        let score = score_normalized_diff(97.9, -1.5);
+        let score = score_normalized_diff(97.9, -1.5, true);
         assert!((score - 100.0).abs() < 0.5, "NVIDIA vs neg sector: {score}");
     }
 
     #[test]
     fn test_normdiff_negative_worse_than_negative_median() {
         // current=-5, median=-1.5 → worse than median, score ~28
-        let score = score_normalized_diff(-5.0, -1.5);
+        let score = score_normalized_diff(-5.0, -1.5, true);
         assert!(score < 40.0, "neg worse than neg median: {score}");
     }
 
     #[test]
     fn test_normdiff_negative_vs_positive_median() {
         // current=-5, median=10 → very bad, score ~0
-        let score = score_normalized_diff(-5.0, 10.0);
+        let score = score_normalized_diff(-5.0, 10.0, true);
         assert!((score - 0.0).abs() < 0.5, "neg vs pos median: {score}");
     }
 
     #[test]
     fn test_normdiff_below_median_positive() {
         // current=5, median=10 → below but positive, score ~40
-        let score = score_normalized_diff(5.0, 10.0);
+        let score = score_normalized_diff(5.0, 10.0, true);
         assert!((score - 40.0).abs() < 0.5, "below median: {score}");
     }
 
     #[test]
     fn test_normdiff_above_median() {
         // current=15, median=10 → above, score ~68
-        let score = score_normalized_diff(15.0, 10.0);
+        let score = score_normalized_diff(15.0, 10.0, true);
         assert!((score - 68.0).abs() < 0.5, "above median: {score}");
     }
 
     #[test]
     fn test_normdiff_both_negative_worse() {
         // current=-20, median=-10 → worse, score ~40
-        let score = score_normalized_diff(-20.0, -10.0);
+        let score = score_normalized_diff(-20.0, -10.0, true);
         assert!((score - 40.0).abs() < 0.5, "both neg worse: {score}");
     }
 
