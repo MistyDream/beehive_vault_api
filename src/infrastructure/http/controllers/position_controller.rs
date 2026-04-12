@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, get, web};
+use actix_web::{HttpResponse, get, web};
 
 use crate::application::error::AppError;
 use crate::domain::wallet::cash_balance::compute_cash_balance;
@@ -14,7 +14,7 @@ use crate::infrastructure::persistence::repositories::{
 pub async fn get_positions(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let transactions = transaction_repository::list_by_portfolio_chronological(
@@ -32,7 +32,7 @@ pub async fn get_positions(
 pub async fn get_cash_balance(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id)
@@ -54,7 +54,7 @@ pub async fn get_cash_balance(
 pub async fn get_portfolio_summary(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id)

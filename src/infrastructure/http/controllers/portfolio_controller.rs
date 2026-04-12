@@ -1,105 +1,102 @@
-use actix_web::{HttpResponse, Responder, delete, get, post, put, web};
-use serde::Deserialize;
+use actix_web::{HttpResponse, delete, get, post, put, web};
+use garde_actix_web::web::Json;
 
 use crate::application::error::AppError;
-use crate::domain::wallet::enums::PortfolioKind;
+use crate::infrastructure::http::dto::request::portfolio_request::{
+    CreatePortfolioRequest, UpdatePortfolioRequest,
+};
+use crate::infrastructure::http::dto::response::portfolio_response::PortfolioResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
 use crate::infrastructure::persistence::models::portfolio::NewPortfolioRow;
 use crate::infrastructure::persistence::repositories::portfolio_repository;
 
-#[derive(Debug, Deserialize)]
-pub struct CreatePortfolioRequest {
-    pub name: String,
-    pub kind: String,
-    pub currency: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdatePortfolioRequest {
-    pub name: String,
-    pub kind: String,
-    pub currency: Option<String>,
-    pub description: Option<String>,
-}
-
 #[post("/portfolios")]
 pub async fn create_portfolio(
     state: web::Data<AppState>,
-    body: web::Json<CreatePortfolioRequest>,
-) -> Result<impl Responder, ApiError> {
-    PortfolioKind::try_from(body.kind.as_str())
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
-
-    let currency = body.currency.clone().unwrap_or_else(|| "EUR".to_owned());
+    body: Json<CreatePortfolioRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let body = body.into_inner();
+    let currency = body.currency.unwrap_or_else(|| "EUR".to_owned());
 
     let new = NewPortfolioRow {
-        name: Box::leak(body.name.clone().into_boxed_str()),
-        kind: Box::leak(body.kind.clone().into_boxed_str()),
+        name: Box::leak(body.name.into_boxed_str()),
+        kind: Box::leak(body.kind.into_boxed_str()),
         currency: Box::leak(currency.into_boxed_str()),
         description: body
             .description
-            .as_deref()
-            .map(|s| &*Box::leak(s.to_owned().into_boxed_str())),
+            .map(|s| &*Box::leak(s.into_boxed_str())),
     };
 
-    let portfolio = portfolio_repository::insert(&state.db, new).await.map_err(AppError::from)?;
-    Ok(HttpResponse::Created().json(portfolio))
+    let portfolio = portfolio_repository::insert(&state.db, new)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(HttpResponse::Created()
+        .insert_header(("Location", format!("/portfolios/{}", portfolio.id)))
+        .json(PortfolioResponse::from(portfolio)))
 }
 
 #[get("/portfolios")]
 pub async fn list_portfolios(
     state: web::Data<AppState>,
-) -> Result<impl Responder, ApiError> {
-    let portfolios = portfolio_repository::list_all(&state.db).await.map_err(AppError::from)?;
-    Ok(HttpResponse::Ok().json(portfolios))
+) -> Result<HttpResponse, ApiError> {
+    let portfolios = portfolio_repository::list_all(&state.db)
+        .await
+        .map_err(AppError::from)?;
+
+    let response: Vec<PortfolioResponse> = portfolios.into_iter().map(PortfolioResponse::from).collect();
+    Ok(HttpResponse::Ok().json(response))
 }
 
 #[get("/portfolios/{id}")]
 pub async fn get_portfolio(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
-    let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id).await.map_err(AppError::from)?;
-    Ok(HttpResponse::Ok().json(portfolio))
+    let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(HttpResponse::Ok().json(PortfolioResponse::from(portfolio)))
 }
 
 #[put("/portfolios/{id}")]
 pub async fn update_portfolio(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-    body: web::Json<UpdatePortfolioRequest>,
-) -> Result<impl Responder, ApiError> {
+    body: Json<UpdatePortfolioRequest>,
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
-
-    PortfolioKind::try_from(body.kind.as_str())
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
-
-    let currency = body.currency.clone().unwrap_or_else(|| "EUR".to_owned());
+    let body = body.into_inner();
+    let currency = body.currency.unwrap_or_else(|| "EUR".to_owned());
 
     let new = NewPortfolioRow {
-        name: Box::leak(body.name.clone().into_boxed_str()),
-        kind: Box::leak(body.kind.clone().into_boxed_str()),
+        name: Box::leak(body.name.into_boxed_str()),
+        kind: Box::leak(body.kind.into_boxed_str()),
         currency: Box::leak(currency.into_boxed_str()),
         description: body
             .description
-            .as_deref()
-            .map(|s| &*Box::leak(s.to_owned().into_boxed_str())),
+            .map(|s| &*Box::leak(s.into_boxed_str())),
     };
 
-    let portfolio = portfolio_repository::update(&state.db, portfolio_id, new).await.map_err(AppError::from)?;
-    Ok(HttpResponse::Ok().json(portfolio))
+    let portfolio = portfolio_repository::update(&state.db, portfolio_id, new)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(HttpResponse::Ok().json(PortfolioResponse::from(portfolio)))
 }
 
 #[delete("/portfolios/{id}")]
 pub async fn delete_portfolio(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
-    let deleted = portfolio_repository::delete(&state.db, portfolio_id).await.map_err(AppError::from)?;
+    let deleted = portfolio_repository::delete(&state.db, portfolio_id)
+        .await
+        .map_err(AppError::from)?;
 
     if deleted {
         Ok(HttpResponse::NoContent().finish())

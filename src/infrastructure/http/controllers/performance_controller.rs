@@ -1,9 +1,8 @@
-use actix_web::{HttpResponse, Responder, get, web};
-use chrono::NaiveDate;
-use serde::Deserialize;
+use actix_web::{HttpResponse, get, web};
 
 use crate::application::error::AppError;
 use crate::domain::wallet::performance::compute_performance;
+use crate::infrastructure::http::dto::request::transaction_request::PerformanceQueryParams;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
 use crate::infrastructure::persistence::repositories::{
@@ -11,18 +10,12 @@ use crate::infrastructure::persistence::repositories::{
 };
 use crate::infrastructure::persistence::repositories::transaction_repository::TransactionFilter;
 
-#[derive(Debug, Deserialize)]
-pub struct PerformanceQueryParams {
-    pub from_date: Option<NaiveDate>,
-    pub to_date: Option<NaiveDate>,
-}
-
 #[get("/portfolios/{id}/performance")]
 pub async fn get_performance(
     state: web::Data<AppState>,
     path: web::Path<i32>,
     query: web::Query<PerformanceQueryParams>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id)

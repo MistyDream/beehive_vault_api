@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, Responder, get, web};
+use actix_web::{HttpResponse, get, web};
 
 use crate::application::error::AppError;
 use crate::domain::wallet::portfolio_scoring::{PortfolioScoring, StockScore};
@@ -13,7 +13,7 @@ use crate::infrastructure::persistence::repositories::{
 pub async fn get_portfolio_scoring(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let portfolio = portfolio_repository::find_by_id(&state.db, portfolio_id)
@@ -51,12 +51,10 @@ pub async fn get_portfolio_scoring(
             0.0
         };
 
-        // Fetch stock info
         let stock = stock_repository::find_by_id(&state.db, pos.stock_id)
             .await
             .map_err(AppError::from)?;
 
-        // Fetch latest score (may not exist)
         let snapshot = score_snapshot_repository::find_latest_by_stock(&state.db, pos.stock_id)
             .await
             .ok();
@@ -82,11 +80,9 @@ pub async fn get_portfolio_scoring(
         None
     };
 
-    let scoring = PortfolioScoring {
+    Ok(HttpResponse::Ok().json(PortfolioScoring {
         portfolio_id: portfolio.id,
         stock_scores,
         weighted_score,
-    };
-
-    Ok(HttpResponse::Ok().json(scoring))
+    }))
 }

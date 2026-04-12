@@ -1,9 +1,12 @@
-use actix_web::{HttpResponse, Responder, delete, get, post, put, web};
-use chrono::NaiveDate;
-use serde::Deserialize;
+use actix_web::{HttpResponse, delete, get, post, put, web};
+use garde_actix_web::web::Json;
 
 use crate::application::error::AppError;
 use crate::domain::wallet::enums::TransactionType;
+use crate::infrastructure::http::dto::request::transaction_request::{
+    CreateTransactionRequest, TransactionQueryParams, UpdateTransactionRequest,
+};
+use crate::infrastructure::http::dto::response::transaction_response::TransactionResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
 use crate::infrastructure::persistence::models::transaction::NewTransactionRow;
@@ -11,48 +14,6 @@ use crate::infrastructure::persistence::repositories::{
     portfolio_repository, transaction_repository,
 };
 use crate::infrastructure::persistence::repositories::transaction_repository::TransactionFilter;
-
-#[derive(Debug, Deserialize)]
-pub struct CreateTransactionRequest {
-    pub stock_id: Option<i32>,
-    pub transaction_type: String,
-    pub executed_at: NaiveDate,
-    pub quantity: Option<f64>,
-    pub unit_price: Option<f64>,
-    pub amount: Option<f64>,
-    pub fees: Option<f64>,
-    pub tax: Option<f64>,
-    pub split_from: Option<i32>,
-    pub split_to: Option<i32>,
-    pub currency: String,
-    pub exchange_rate: Option<f64>,
-    pub notes: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateTransactionRequest {
-    pub stock_id: Option<i32>,
-    pub transaction_type: String,
-    pub executed_at: NaiveDate,
-    pub quantity: Option<f64>,
-    pub unit_price: Option<f64>,
-    pub amount: Option<f64>,
-    pub fees: Option<f64>,
-    pub tax: Option<f64>,
-    pub split_from: Option<i32>,
-    pub split_to: Option<i32>,
-    pub currency: String,
-    pub exchange_rate: Option<f64>,
-    pub notes: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct TransactionQueryParams {
-    pub transaction_type: Option<String>,
-    pub stock_id: Option<i32>,
-    pub from_date: Option<NaiveDate>,
-    pub to_date: Option<NaiveDate>,
-}
 
 /// Validate required fields depending on transaction type.
 fn validate_transaction(tx_type: &TransactionType, req: &CreateTransactionRequest) -> Result<(), String> {
@@ -98,9 +59,9 @@ fn validate_transaction(tx_type: &TransactionType, req: &CreateTransactionReques
     Ok(())
 }
 
-fn build_new_row(req: &CreateTransactionRequest) -> NewTransactionRow<'static> {
+fn build_new_row(portfolio_id: i32, req: &CreateTransactionRequest) -> NewTransactionRow<'static> {
     NewTransactionRow {
-        portfolio_id: 0, // overwritten by caller
+        portfolio_id,
         stock_id: req.stock_id,
         transaction_type: Box::leak(req.transaction_type.clone().into_boxed_str()),
         executed_at: req.executed_at,
@@ -117,9 +78,9 @@ fn build_new_row(req: &CreateTransactionRequest) -> NewTransactionRow<'static> {
     }
 }
 
-fn build_new_row_from_update(req: &UpdateTransactionRequest) -> NewTransactionRow<'static> {
+fn build_new_row_from_update(portfolio_id: i32, req: &UpdateTransactionRequest) -> NewTransactionRow<'static> {
     NewTransactionRow {
-        portfolio_id: 0, // overwritten by caller
+        portfolio_id,
         stock_id: req.stock_id,
         transaction_type: Box::leak(req.transaction_type.clone().into_boxed_str()),
         executed_at: req.executed_at,
@@ -140,9 +101,10 @@ fn build_new_row_from_update(req: &UpdateTransactionRequest) -> NewTransactionRo
 pub async fn create_transaction(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-    body: web::Json<CreateTransactionRequest>,
-) -> Result<impl Responder, ApiError> {
+    body: Json<CreateTransactionRequest>,
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
+    let body = body.into_inner();
 
     // Verify portfolio exists
     portfolio_repository::find_by_id(&state.db, portfolio_id)
@@ -150,18 +112,20 @@ pub async fn create_transaction(
         .map_err(AppError::from)?;
 
     let tx_type = TransactionType::try_from(body.transaction_type.as_str())
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
+        .map_err(ApiError::BadRequest)?;
 
     validate_transaction(&tx_type, &body)
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
+        .map_err(ApiError::BadRequest)?;
 
-    let mut new = build_new_row(&body);
-    new.portfolio_id = portfolio_id;
+    let new = build_new_row(portfolio_id, &body);
 
     let transaction = transaction_repository::insert(&state.db, new)
         .await
         .map_err(AppError::from)?;
-    Ok(HttpResponse::Created().json(transaction))
+
+    Ok(HttpResponse::Created()
+        .insert_header(("Location", format!("/portfolios/{}/transactions/{}", portfolio_id, transaction.id)))
+        .json(TransactionResponse::from(transaction)))
 }
 
 #[get("/portfolios/{id}/transactions")]
@@ -169,7 +133,7 @@ pub async fn list_transactions(
     state: web::Data<AppState>,
     path: web::Path<i32>,
     query: web::Query<TransactionQueryParams>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
 
     let has_filters = query.transaction_type.is_some()
@@ -193,33 +157,36 @@ pub async fn list_transactions(
             .map_err(AppError::from)?
     };
 
-    Ok(HttpResponse::Ok().json(transactions))
+    let response: Vec<TransactionResponse> = transactions.into_iter().map(TransactionResponse::from).collect();
+    Ok(HttpResponse::Ok().json(response))
 }
 
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn get_transaction(
     state: web::Data<AppState>,
     path: web::Path<(i32, i64)>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
     let transaction = transaction_repository::find_by_id(&state.db, portfolio_id, tx_id)
         .await
         .map_err(AppError::from)?;
-    Ok(HttpResponse::Ok().json(transaction))
+
+    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
 }
 
 #[put("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn update_transaction(
     state: web::Data<AppState>,
     path: web::Path<(i32, i64)>,
-    body: web::Json<UpdateTransactionRequest>,
-) -> Result<impl Responder, ApiError> {
+    body: Json<UpdateTransactionRequest>,
+) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
+    let body = body.into_inner();
 
     let tx_type = TransactionType::try_from(body.transaction_type.as_str())
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
+        .map_err(ApiError::BadRequest)?;
 
-    // Reuse the same validation (fields are identical)
+    // Reuse validation with a temporary CreateTransactionRequest
     let as_create = CreateTransactionRequest {
         stock_id: body.stock_id,
         transaction_type: body.transaction_type.clone(),
@@ -236,22 +203,22 @@ pub async fn update_transaction(
         notes: body.notes.clone(),
     };
     validate_transaction(&tx_type, &as_create)
-        .map_err(|e| ApiError::from(AppError::BadRequest(e)))?;
+        .map_err(ApiError::BadRequest)?;
 
-    let mut new = build_new_row_from_update(&body);
-    new.portfolio_id = portfolio_id;
+    let new = build_new_row_from_update(portfolio_id, &body);
 
     let transaction = transaction_repository::update(&state.db, portfolio_id, tx_id, new)
         .await
         .map_err(AppError::from)?;
-    Ok(HttpResponse::Ok().json(transaction))
+
+    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
 }
 
 #[delete("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn delete_transaction(
     state: web::Data<AppState>,
     path: web::Path<(i32, i64)>,
-) -> Result<impl Responder, ApiError> {
+) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
     let deleted = transaction_repository::delete(&state.db, portfolio_id, tx_id)
         .await
