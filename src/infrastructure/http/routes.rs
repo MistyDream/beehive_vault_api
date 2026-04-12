@@ -4,6 +4,7 @@ use crate::infrastructure::http::controllers::account_controller::get_account;
 use crate::infrastructure::http::controllers::portfolio_controller::{
     create_portfolio, delete_portfolio, get_portfolio, list_portfolios, update_portfolio,
 };
+use crate::infrastructure::http::controllers::performance_controller::get_performance;
 use crate::infrastructure::http::controllers::position_controller::{
     get_cash_balance, get_portfolio_summary, get_positions,
 };
@@ -27,4 +28,5 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_positions);
     cfg.service(get_cash_balance);
     cfg.service(get_portfolio_summary);
+    cfg.service(get_performance);
 }
