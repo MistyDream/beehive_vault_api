@@ -12,3 +12,12 @@ pub struct Portfolio {
     pub description: Option<String>,
     pub updated_at: NaiveDateTime,
 }
+
+pub struct NewPortfolio {
+    pub name: String,
+    pub kind: PortfolioKind,
+    pub currency: String,
+    pub description: Option<String>,
+}
+
+pub type UpdatePortfolio = NewPortfolio;

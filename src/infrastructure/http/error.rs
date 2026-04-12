@@ -42,6 +42,7 @@ impl ResponseError for ApiError {
         match self {
             ApiError::App(err) => match err {
                 AppError::NotFound => StatusCode::NOT_FOUND,
+                AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
                 AppError::Conflict(_) => StatusCode::CONFLICT,
                 AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
@@ -57,6 +58,11 @@ impl ResponseError for ApiError {
             ApiError::App(AppError::NotFound) => (
                 "Not Found".to_string(),
                 Some("The requested resource was not found".to_string()),
+                None,
+            ),
+            ApiError::App(AppError::BadRequest(msg)) => (
+                "Bad Request".to_string(),
+                Some(msg.clone()),
                 None,
             ),
             ApiError::App(AppError::Conflict(msg)) => (

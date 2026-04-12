@@ -3,170 +3,216 @@
 //! Provides CRUD operations for portfolio transactions
 //! (buy, sell, dividend, fee, split, deposit, withdrawal).
 
-use chrono::NaiveDate;
+use std::future::Future;
+use std::pin::Pin;
+
 use diesel::prelude::*;
 
-use crate::domain::wallet::transaction::Transaction;
+use crate::application::error::AppError;
+use crate::application::ports::transaction_repository::TransactionRepository;
+use crate::domain::wallet::transaction::{
+    NewTransaction, Transaction, TransactionFilter, UpdateTransaction,
+};
 use crate::infrastructure::persistence::Db;
-use crate::infrastructure::persistence::error::DbError;
 use crate::infrastructure::persistence::models::transaction::{NewTransactionRow, TransactionRow};
 use crate::schema::transactions;
 
-/// Fetch a single transaction by its ID, scoped to a portfolio.
-pub async fn find_by_id(
-    db: &Db,
-    portfolio_id: i32,
-    tx_id: i64,
-) -> Result<Transaction, DbError> {
-    db.exec(move |conn| {
-        let row = transactions::table
-            .find(tx_id)
-            .filter(transactions::portfolio_id.eq(portfolio_id))
-            .select(TransactionRow::as_select())
-            .first(conn)?;
-        Transaction::try_from(row)
-    })
-    .await
+#[derive(Clone)]
+pub struct PgTransactionRepository {
+    db: Db,
 }
 
-/// List all transactions for a portfolio in chronological order (oldest first).
-/// Used by position and cash computation.
-pub async fn list_by_portfolio_chronological(
-    db: &Db,
-    portfolio_id: i32,
-) -> Result<Vec<Transaction>, DbError> {
-    db.exec(move |conn| {
-        let rows = transactions::table
-            .filter(transactions::portfolio_id.eq(portfolio_id))
-            .select(TransactionRow::as_select())
-            .order((transactions::executed_at.asc(), transactions::id.asc()))
-            .load(conn)?;
-        rows.into_iter().map(Transaction::try_from).collect()
-    })
-    .await
+impl PgTransactionRepository {
+    pub fn new(db: Db) -> Self {
+        Self { db }
+    }
 }
 
-/// List all transactions for a portfolio, ordered by date descending.
-pub async fn list_by_portfolio(
-    db: &Db,
-    portfolio_id: i32,
-) -> Result<Vec<Transaction>, DbError> {
-    db.exec(move |conn| {
-        let rows = transactions::table
-            .filter(transactions::portfolio_id.eq(portfolio_id))
-            .select(TransactionRow::as_select())
-            .order((transactions::executed_at.desc(), transactions::id.desc()))
-            .load(conn)?;
-        rows.into_iter().map(Transaction::try_from).collect()
-    })
-    .await
-}
+impl TransactionRepository for PgTransactionRepository {
+    fn find_by_id(
+        &self,
+        portfolio_id: i32,
+        tx_id: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let row = transactions::table
+                        .find(tx_id)
+                        .filter(transactions::portfolio_id.eq(portfolio_id))
+                        .select(TransactionRow::as_select())
+                        .first(conn)?;
+                    Transaction::try_from(row)
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 
-/// Optional filters for listing transactions.
-pub struct TransactionFilter {
-    pub transaction_type: Option<String>,
-    pub stock_id: Option<i32>,
-    pub from_date: Option<NaiveDate>,
-    pub to_date: Option<NaiveDate>,
-}
+    fn list_by_portfolio(
+        &self,
+        portfolio_id: i32,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let rows = transactions::table
+                        .filter(transactions::portfolio_id.eq(portfolio_id))
+                        .select(TransactionRow::as_select())
+                        .order((transactions::executed_at.desc(), transactions::id.desc()))
+                        .load(conn)?;
+                    rows.into_iter().map(Transaction::try_from).collect()
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 
-/// List transactions for a portfolio with optional filters.
-pub async fn list_by_portfolio_filtered(
-    db: &Db,
-    portfolio_id: i32,
-    filters: TransactionFilter,
-) -> Result<Vec<Transaction>, DbError> {
-    db.exec(move |conn| {
-        let mut query = transactions::table
-            .filter(transactions::portfolio_id.eq(portfolio_id))
-            .into_boxed();
+    fn list_by_portfolio_chronological(
+        &self,
+        portfolio_id: i32,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let rows = transactions::table
+                        .filter(transactions::portfolio_id.eq(portfolio_id))
+                        .select(TransactionRow::as_select())
+                        .order((transactions::executed_at.asc(), transactions::id.asc()))
+                        .load(conn)?;
+                    rows.into_iter().map(Transaction::try_from).collect()
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 
-        if let Some(tx_type) = &filters.transaction_type {
-            query = query.filter(transactions::transaction_type.eq(tx_type));
-        }
-        if let Some(sid) = filters.stock_id {
-            query = query.filter(transactions::stock_id.eq(sid));
-        }
-        if let Some(from) = filters.from_date {
-            query = query.filter(transactions::executed_at.ge(from));
-        }
-        if let Some(to) = filters.to_date {
-            query = query.filter(transactions::executed_at.le(to));
-        }
+    fn list_by_portfolio_filtered(
+        &self,
+        portfolio_id: i32,
+        filters: TransactionFilter,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let mut query = transactions::table
+                        .filter(transactions::portfolio_id.eq(portfolio_id))
+                        .into_boxed();
 
-        let rows = query
-            .select(TransactionRow::as_select())
-            .order((transactions::executed_at.desc(), transactions::id.desc()))
-            .load(conn)?;
-        rows.into_iter().map(Transaction::try_from).collect()
-    })
-    .await
-}
+                    if let Some(tx_type) = &filters.transaction_type {
+                        query = query.filter(transactions::transaction_type.eq(tx_type));
+                    }
+                    if let Some(sid) = filters.stock_id {
+                        query = query.filter(transactions::stock_id.eq(sid));
+                    }
+                    if let Some(from) = filters.from_date {
+                        query = query.filter(transactions::executed_at.ge(from));
+                    }
+                    if let Some(to) = filters.to_date {
+                        query = query.filter(transactions::executed_at.le(to));
+                    }
 
-/// Insert a new transaction and return the created entity.
-pub async fn insert(
-    db: &Db,
-    new: NewTransactionRow<'static>,
-) -> Result<Transaction, DbError> {
-    db.exec(move |conn| {
-        let row = diesel::insert_into(transactions::table)
-            .values(&new)
-            .returning(TransactionRow::as_returning())
-            .get_result(conn)?;
-        Transaction::try_from(row)
-    })
-    .await
-}
+                    let rows = query
+                        .select(TransactionRow::as_select())
+                        .order((transactions::executed_at.desc(), transactions::id.desc()))
+                        .load(conn)?;
+                    rows.into_iter().map(Transaction::try_from).collect()
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 
-/// Replace all mutable fields of an existing transaction.
-pub async fn update(
-    db: &Db,
-    portfolio_id: i32,
-    tx_id: i64,
-    new: NewTransactionRow<'static>,
-) -> Result<Transaction, DbError> {
-    db.exec(move |conn| {
-        let row = diesel::update(
-            transactions::table
-                .find(tx_id)
-                .filter(transactions::portfolio_id.eq(portfolio_id)),
-        )
-        .set((
-            transactions::stock_id.eq(new.stock_id),
-            transactions::transaction_type.eq(new.transaction_type),
-            transactions::executed_at.eq(new.executed_at),
-            transactions::quantity.eq(new.quantity),
-            transactions::unit_price.eq(new.unit_price),
-            transactions::amount.eq(new.amount),
-            transactions::fees.eq(new.fees),
-            transactions::tax.eq(new.tax),
-            transactions::split_from.eq(new.split_from),
-            transactions::split_to.eq(new.split_to),
-            transactions::currency.eq(new.currency),
-            transactions::exchange_rate.eq(new.exchange_rate),
-            transactions::notes.eq(new.notes),
-        ))
-        .returning(TransactionRow::as_returning())
-        .get_result(conn)?;
-        Transaction::try_from(row)
-    })
-    .await
-}
+    fn insert(
+        &self,
+        new: NewTransaction,
+    ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let row_data = NewTransactionRow {
+                        portfolio_id: new.portfolio_id,
+                        stock_id: new.stock_id,
+                        transaction_type: new.transaction_type.as_str(),
+                        executed_at: new.executed_at,
+                        quantity: new.quantity,
+                        unit_price: new.unit_price,
+                        amount: new.amount,
+                        fees: new.fees,
+                        tax: new.tax,
+                        split_from: new.split_from,
+                        split_to: new.split_to,
+                        currency: &new.currency,
+                        exchange_rate: new.exchange_rate,
+                        notes: new.notes.as_deref(),
+                    };
+                    let row = diesel::insert_into(transactions::table)
+                        .values(&row_data)
+                        .returning(TransactionRow::as_returning())
+                        .get_result(conn)?;
+                    Transaction::try_from(row)
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 
-/// Delete a transaction by ID, scoped to a portfolio. Returns `true` if deleted.
-pub async fn delete(
-    db: &Db,
-    portfolio_id: i32,
-    tx_id: i64,
-) -> Result<bool, DbError> {
-    db.exec(move |conn| {
-        let count = diesel::delete(
-            transactions::table
-                .find(tx_id)
-                .filter(transactions::portfolio_id.eq(portfolio_id)),
-        )
-        .execute(conn)?;
-        Ok(count > 0)
-    })
-    .await
+    fn update(
+        &self,
+        portfolio_id: i32,
+        tx_id: i64,
+        data: UpdateTransaction,
+    ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let row = diesel::update(
+                        transactions::table
+                            .find(tx_id)
+                            .filter(transactions::portfolio_id.eq(portfolio_id)),
+                    )
+                    .set((
+                        transactions::stock_id.eq(data.stock_id),
+                        transactions::transaction_type.eq(data.transaction_type.as_str()),
+                        transactions::executed_at.eq(data.executed_at),
+                        transactions::quantity.eq(data.quantity),
+                        transactions::unit_price.eq(data.unit_price),
+                        transactions::amount.eq(data.amount),
+                        transactions::fees.eq(data.fees),
+                        transactions::tax.eq(data.tax),
+                        transactions::split_from.eq(data.split_from),
+                        transactions::split_to.eq(data.split_to),
+                        transactions::currency.eq(&data.currency),
+                        transactions::exchange_rate.eq(data.exchange_rate),
+                        transactions::notes.eq(&data.notes),
+                    ))
+                    .returning(TransactionRow::as_returning())
+                    .get_result(conn)?;
+                    Transaction::try_from(row)
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
+    fn delete(
+        &self,
+        portfolio_id: i32,
+        tx_id: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            self.db
+                .exec(move |conn| {
+                    let count = diesel::delete(
+                        transactions::table
+                            .find(tx_id)
+                            .filter(transactions::portfolio_id.eq(portfolio_id)),
+                    )
+                    .execute(conn)?;
+                    Ok(count > 0)
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
 }

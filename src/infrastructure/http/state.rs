@@ -1,12 +1,14 @@
-use crate::infrastructure::persistence::Db;
+use std::sync::Arc;
+
+use crate::application::services::portfolio_scoring_service::PortfolioScoringService;
+use crate::application::services::portfolio_service::PortfolioService;
+use crate::application::services::position_service::PositionService;
+use crate::application::services::transaction_service::TransactionService;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Db,
-}
-
-impl AppState {
-    pub fn new(db: Db) -> Self {
-        Self { db }
-    }
+    pub portfolio_service: Arc<PortfolioService>,
+    pub transaction_service: Arc<TransactionService>,
+    pub position_service: Arc<PositionService>,
+    pub portfolio_scoring_service: Arc<PortfolioScoringService>,
 }
