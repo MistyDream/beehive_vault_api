@@ -19,6 +19,7 @@ impl ResponseError for ApiError {
         match self {
             ApiError::App(err) => match err {
                 AppError::NotFound => StatusCode::NOT_FOUND,
+                AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
                 AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
         }

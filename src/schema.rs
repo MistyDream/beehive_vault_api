@@ -55,6 +55,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    portfolios (id) {
+        id -> Int4,
+        name -> Varchar,
+        kind -> Varchar,
+        #[max_length = 3]
+        currency -> Varchar,
+        description -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     score_details (id) {
         id -> Int4,
         snapshot_id -> Int4,
@@ -115,6 +128,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     indicator_sub_scores,
     metric_values,
     metrics_catalog,
+    portfolios,
     score_details,
     score_snapshots,
     sector_benchmarks,
