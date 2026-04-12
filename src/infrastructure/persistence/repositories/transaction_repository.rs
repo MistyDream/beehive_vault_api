@@ -29,6 +29,23 @@ pub async fn find_by_id(
     .await
 }
 
+/// List all transactions for a portfolio in chronological order (oldest first).
+/// Used by position and cash computation.
+pub async fn list_by_portfolio_chronological(
+    db: &Db,
+    portfolio_id: i32,
+) -> Result<Vec<Transaction>, DbError> {
+    db.exec(move |conn| {
+        let rows = transactions::table
+            .filter(transactions::portfolio_id.eq(portfolio_id))
+            .select(TransactionRow::as_select())
+            .order((transactions::executed_at.asc(), transactions::id.asc()))
+            .load(conn)?;
+        rows.into_iter().map(Transaction::try_from).collect()
+    })
+    .await
+}
+
 /// List all transactions for a portfolio, ordered by date descending.
 pub async fn list_by_portfolio(
     db: &Db,
