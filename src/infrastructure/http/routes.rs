@@ -4,6 +4,10 @@ use crate::infrastructure::http::controllers::account_controller::get_account;
 use crate::infrastructure::http::controllers::portfolio_controller::{
     create_portfolio, delete_portfolio, get_portfolio, list_portfolios, update_portfolio,
 };
+use crate::infrastructure::http::controllers::transaction_controller::{
+    create_transaction, delete_transaction, get_transaction, list_transactions,
+    update_transaction,
+};
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_account);
@@ -12,4 +16,9 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_portfolio);
     cfg.service(update_portfolio);
     cfg.service(delete_portfolio);
+    cfg.service(create_transaction);
+    cfg.service(list_transactions);
+    cfg.service(get_transaction);
+    cfg.service(update_transaction);
+    cfg.service(delete_transaction);
 }
