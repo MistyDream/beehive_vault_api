@@ -55,6 +55,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    portfolios (id) {
+        id -> Int4,
+        name -> Varchar,
+        kind -> Varchar,
+        #[max_length = 3]
+        currency -> Varchar,
+        description -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     score_details (id) {
         id -> Int4,
         snapshot_id -> Int4,
@@ -104,19 +117,45 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    transactions (id) {
+        id -> Int8,
+        portfolio_id -> Int4,
+        stock_id -> Nullable<Int4>,
+        transaction_type -> Varchar,
+        executed_at -> Date,
+        quantity -> Nullable<Float8>,
+        unit_price -> Nullable<Float8>,
+        amount -> Nullable<Float8>,
+        fees -> Float8,
+        tax -> Float8,
+        split_from -> Nullable<Int4>,
+        split_to -> Nullable<Int4>,
+        #[max_length = 3]
+        currency -> Varchar,
+        exchange_rate -> Float8,
+        notes -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(indicator_scores -> score_details (detail_id));
 diesel::joinable!(indicator_sub_scores -> indicator_scores (indicator_score_id));
 diesel::joinable!(metric_values -> stocks (stock_id));
 diesel::joinable!(score_details -> score_snapshots (snapshot_id));
 diesel::joinable!(score_snapshots -> stocks (stock_id));
+diesel::joinable!(transactions -> portfolios (portfolio_id));
+diesel::joinable!(transactions -> stocks (stock_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     indicator_scores,
     indicator_sub_scores,
     metric_values,
     metrics_catalog,
+    portfolios,
     score_details,
     score_snapshots,
     sector_benchmarks,
     stocks,
+    transactions,
 );

@@ -1,4 +1,6 @@
 pub mod indicator_score_repository;
+pub mod portfolio_repository;
+pub mod transaction_repository;
 pub mod indicator_sub_score_repository;
 pub mod metric_catalog_repository;
 pub mod metric_value_repository;

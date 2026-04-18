@@ -1,4 +1,6 @@
 pub mod indicator_score;
+pub mod portfolio;
+pub mod transaction;
 pub mod indicator_sub_score;
 pub mod metric_catalog;
 pub mod metric_value;
