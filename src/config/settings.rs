@@ -9,6 +9,7 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 pub struct Config {
     pub server: ServerConfig,
     pub db: DbConfig,
+    pub cors: CorsConfig,
 }
 
 #[derive(Clone)]
@@ -22,11 +23,23 @@ pub struct DbConfig {
     pub database_url: String,
 }
 
+#[derive(Clone)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+}
+
 pub fn init() -> Result<&'static Config> {
     let api_url = env::var("API_ADDR").context("API_ADDR must be set")?;
     let port = env::var("API_PORT").context("PORT must be set")?.parse::<u16>().context("PORT must be a valid u16")?;
 
     let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+
+    let allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://beehive-vault.fr,http://localhost:3000".to_string())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
 
     let config = Config {
         server: ServerConfig {
@@ -34,6 +47,7 @@ pub fn init() -> Result<&'static Config> {
             port,
         },
         db: DbConfig { database_url },
+        cors: CorsConfig { allowed_origins },
     };
 
     Ok(CONFIG.get_or_init(|| config))
