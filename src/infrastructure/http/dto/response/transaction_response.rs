@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use chrono::NaiveDate;
 use serde::Serialize;
 
+use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
 
@@ -8,7 +11,7 @@ use crate::domain::wallet::transaction::Transaction;
 pub struct TransactionResponse {
     pub id: i64,
     pub portfolio_id: i32,
-    pub stock_id: Option<i32>,
+    pub stock: Option<Stock>,
     pub transaction_type: TransactionType,
     pub executed_at: NaiveDate,
     pub quantity: Option<f64>,
@@ -23,12 +26,13 @@ pub struct TransactionResponse {
     pub notes: Option<String>,
 }
 
-impl From<Transaction> for TransactionResponse {
-    fn from(t: Transaction) -> Self {
+impl TransactionResponse {
+    pub fn from_transaction(t: Transaction, stocks_by_id: &HashMap<i32, Stock>) -> Self {
+        let stock = t.stock_id.and_then(|id| stocks_by_id.get(&id).cloned());
         TransactionResponse {
             id: t.id,
             portfolio_id: t.portfolio_id,
-            stock_id: t.stock_id,
+            stock,
             transaction_type: t.transaction_type,
             executed_at: t.executed_at,
             quantity: t.quantity,

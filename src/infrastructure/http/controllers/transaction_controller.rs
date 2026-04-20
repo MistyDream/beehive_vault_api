@@ -1,6 +1,8 @@
 use actix_web::{HttpResponse, delete, get, post, put, web};
 use garde_actix_web::web::Json;
 
+use crate::application::services::pagination::Paginated;
+use crate::application::services::transaction_service::TransactionsQuery;
 use crate::domain::wallet::transaction::TransactionFilter;
 use crate::infrastructure::http::dto::request::transaction_request::{
     CreateTransactionRequest, TransactionQueryParams, UpdateTransactionRequest,
@@ -17,11 +19,11 @@ pub async fn create_transaction(
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
     let new = body.into_inner().into_new_transaction(portfolio_id);
-    let transaction = state.transaction_service.create(portfolio_id, new).await?;
+    let (transaction, stocks) = state.transaction_service.create(portfolio_id, new).await?;
 
     Ok(HttpResponse::Created()
         .insert_header(("Location", format!("/portfolios/{}/transactions/{}", portfolio_id, transaction.id)))
-        .json(TransactionResponse::from(transaction)))
+        .json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[get("/portfolios/{id}/transactions")]
@@ -31,26 +33,29 @@ pub async fn list_transactions(
     query: web::Query<TransactionQueryParams>,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
+    let q = query.into_inner();
 
-    let has_filters = query.transaction_type.is_some()
-        || query.stock_id.is_some()
-        || query.from_date.is_some()
-        || query.to_date.is_some();
-
-    let filters = if has_filters {
-        Some(TransactionFilter {
-            transaction_type: query.transaction_type.clone(),
-            stock_id: query.stock_id,
-            from_date: query.from_date,
-            to_date: query.to_date,
-        })
-    } else {
-        None
+    let tx_query = TransactionsQuery {
+        filters: TransactionFilter {
+            transaction_type: q.transaction_type,
+            stock_id: q.stock_id,
+            from_date: q.from_date,
+            to_date: q.to_date,
+        },
+        sort_by: q.sort_by,
+        sort_dir: q.sort_dir,
+        page: q.page,
+        limit: q.limit,
     };
 
-    let transactions = state.transaction_service.list(portfolio_id, filters).await?;
-    let response: Vec<TransactionResponse> = transactions.into_iter().map(TransactionResponse::from).collect();
-    Ok(HttpResponse::Ok().json(response))
+    let (paginated, stocks) = state.transaction_service.list_paginated(portfolio_id, tx_query).await?;
+    let items: Vec<TransactionResponse> = paginated
+        .items
+        .into_iter()
+        .map(|t| TransactionResponse::from_transaction(t, &stocks))
+        .collect();
+
+    Ok(HttpResponse::Ok().json(Paginated { items, total: paginated.total }))
 }
 
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
@@ -59,8 +64,8 @@ pub async fn get_transaction(
     path: web::Path<(i32, i64)>,
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
-    let transaction = state.transaction_service.get(portfolio_id, tx_id).await?;
-    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
+    let (transaction, stocks) = state.transaction_service.get(portfolio_id, tx_id).await?;
+    Ok(HttpResponse::Ok().json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[put("/portfolios/{portfolio_id}/transactions/{tx_id}")]
@@ -71,8 +76,8 @@ pub async fn update_transaction(
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
     let data = body.into_inner().into_update_transaction(portfolio_id);
-    let transaction = state.transaction_service.update(portfolio_id, tx_id, data).await?;
-    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
+    let (transaction, stocks) = state.transaction_service.update(portfolio_id, tx_id, data).await?;
+    Ok(HttpResponse::Ok().json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[delete("/portfolios/{portfolio_id}/transactions/{tx_id}")]

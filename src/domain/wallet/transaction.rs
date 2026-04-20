@@ -41,6 +41,7 @@ pub struct NewTransaction {
 
 pub type UpdateTransaction = NewTransaction;
 
+#[derive(Debug, Default, Clone)]
 pub struct TransactionFilter {
     pub transaction_type: Option<String>,
     pub stock_id: Option<i32>,

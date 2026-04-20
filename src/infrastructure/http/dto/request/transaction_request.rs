@@ -73,6 +73,10 @@ pub struct TransactionQueryParams {
     pub stock_id: Option<i32>,
     pub from_date: Option<NaiveDate>,
     pub to_date: Option<NaiveDate>,
+    pub sort_by: Option<String>,
+    pub sort_dir: Option<String>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
