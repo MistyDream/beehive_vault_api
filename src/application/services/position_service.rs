@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::NaiveDate;
@@ -7,13 +6,13 @@ use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
-use crate::application::services::pagination::{paginate_slice, Paginated};
-use crate::domain::market::stock::Stock;
+use crate::application::services::pagination::{paginate_slice, Page, DEFAULT_LIMIT, DEFAULT_PAGE};
+use crate::application::services::stock_lookup::fetch_stocks_for_transactions;
 use crate::domain::wallet::cash_balance::{compute_cash_balance, CashBalance};
 use crate::domain::wallet::performance::{compute_performance, PerformanceReport};
 use crate::domain::wallet::portfolio_summary::PortfolioSummary;
 use crate::domain::wallet::position::{compute_positions, Position};
-use crate::domain::wallet::transaction::{Transaction, TransactionFilter};
+use crate::domain::wallet::transaction::TransactionFilter;
 
 #[derive(Debug, Default, Clone)]
 pub struct PositionsQuery {
@@ -38,22 +37,11 @@ impl PositionService {
         Self { portfolio_repo, transaction_repo, stock_repo }
     }
 
-    async fn fetch_stocks_for(&self, transactions: &[Transaction]) -> Result<HashMap<i32, Stock>, AppError> {
-        let stock_ids: Vec<i32> = transactions
-            .iter()
-            .filter_map(|t| t.stock_id)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-        let stocks = self.stock_repo.find_by_ids(stock_ids).await?;
-        Ok(stocks.into_iter().map(|s| (s.id, s)).collect())
-    }
-
     pub async fn get_positions(&self, portfolio_id: i32) -> Result<Vec<Position>, AppError> {
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
-        let stocks = self.fetch_stocks_for(&transactions).await?;
+        let stocks = fetch_stocks_for_transactions(&self.stock_repo, &transactions).await?;
         Ok(compute_positions(&transactions, &stocks))
     }
 
@@ -61,25 +49,26 @@ impl PositionService {
         &self,
         portfolio_id: i32,
         query: PositionsQuery,
-    ) -> Result<Paginated<Position>, AppError> {
+    ) -> Result<Page<Position>, AppError> {
         let mut positions = self.get_positions(portfolio_id).await?;
 
-        let sort_by = query.sort_by.as_deref().unwrap_or("weight");
-        let ascending = matches!(query.sort_dir.as_deref(), Some("asc"));
+        let ascending = query.sort_dir.as_deref() == Some("asc");
+        let tiebreaker = |a: &Position, b: &Position| a.stock.id.cmp(&b.stock.id);
 
         positions.sort_by(|a, b| {
-            let ord = match sort_by {
+            let ord = match query.sort_by.as_deref().unwrap_or("weight") {
                 "symbol" => a.stock.symbol.cmp(&b.stock.symbol),
                 "quantity" => a.quantity.partial_cmp(&b.quantity).unwrap_or(std::cmp::Ordering::Equal),
                 "average_cost" => a.average_cost.partial_cmp(&b.average_cost).unwrap_or(std::cmp::Ordering::Equal),
                 "total_cost" => a.total_cost.partial_cmp(&b.total_cost).unwrap_or(std::cmp::Ordering::Equal),
                 _ => a.weight.partial_cmp(&b.weight).unwrap_or(std::cmp::Ordering::Equal),
             };
-            if ascending { ord } else { ord.reverse() }
+            let ord = if ascending { ord } else { ord.reverse() };
+            ord.then_with(|| tiebreaker(a, b))
         });
 
-        let page = query.page.unwrap_or(1);
-        let limit = query.limit.unwrap_or(25);
+        let page = query.page.unwrap_or(DEFAULT_PAGE);
+        let limit = query.limit.unwrap_or(DEFAULT_LIMIT);
         Ok(paginate_slice(positions, page, limit))
     }
 
@@ -96,7 +85,7 @@ impl PositionService {
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
-        let stocks = self.fetch_stocks_for(&transactions).await?;
+        let stocks = fetch_stocks_for_transactions(&self.stock_repo, &transactions).await?;
         let positions = compute_positions(&transactions, &stocks);
         let cash = compute_cash_balance(&transactions, &portfolio.currency);
         let total_invested: f64 = positions.iter().map(|p| p.total_cost).sum();

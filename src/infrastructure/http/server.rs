@@ -1,10 +1,12 @@
 use actix_cors::Cors;
+use actix_web::dev::Service;
 use actix_web::{App, HttpServer, web, http};
 use anyhow::Result;
-use garde_actix_web::web::JsonConfig;
+use garde_actix_web::web::{JsonConfig, QueryConfig};
 
 use crate::config::settings;
 use crate::infrastructure::http::error::garde_error_handler;
+use crate::infrastructure::http::request_context::REQUEST_PATH;
 use crate::infrastructure::http::routes::configure_routes;
 use crate::infrastructure::http::state::AppState;
 
@@ -27,6 +29,11 @@ pub async fn run(state: AppState) -> Result<()> {
         App::new()
             .app_data(app_state.clone())
             .app_data(JsonConfig::default().error_handler(garde_error_handler))
+            .app_data(QueryConfig::default().error_handler(garde_error_handler))
+            .wrap_fn(|req, srv| {
+                let path = req.path().to_string();
+                REQUEST_PATH.scope(path, srv.call(req))
+            })
             .wrap(cors)
             .configure(configure_routes)
     };

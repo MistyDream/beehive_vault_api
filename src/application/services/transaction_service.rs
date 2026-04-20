@@ -1,11 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
-use crate::application::services::pagination::{paginate_slice, Paginated};
+use crate::application::services::pagination::{paginate_slice, Page, DEFAULT_LIMIT, DEFAULT_PAGE};
+use crate::application::services::stock_lookup::{fetch_stock_by_id_optional, fetch_stocks_for_transactions};
 use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::{NewTransaction, Transaction, TransactionFilter, UpdateTransaction};
@@ -34,27 +35,6 @@ impl TransactionService {
         Self { portfolio_repo, transaction_repo, stock_repo }
     }
 
-    async fn fetch_stocks_for(&self, transactions: &[Transaction]) -> Result<HashMap<i32, Stock>, AppError> {
-        let stock_ids: Vec<i32> = transactions
-            .iter()
-            .filter_map(|t| t.stock_id)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-        let stocks = self.stock_repo.find_by_ids(stock_ids).await?;
-        Ok(stocks.into_iter().map(|s| (s.id, s)).collect())
-    }
-
-    async fn fetch_stock_for(&self, transaction: &Transaction) -> Result<HashMap<i32, Stock>, AppError> {
-        match transaction.stock_id {
-            Some(id) => {
-                let stocks = self.stock_repo.find_by_ids(vec![id]).await?;
-                Ok(stocks.into_iter().map(|s| (s.id, s)).collect())
-            }
-            None => Ok(HashMap::new()),
-        }
-    }
-
     pub async fn create(
         &self,
         portfolio_id: i32,
@@ -63,7 +43,7 @@ impl TransactionService {
         self.portfolio_repo.find_by_id(portfolio_id).await?;
         Self::validate(&new)?;
         let transaction = self.transaction_repo.insert(new).await?;
-        let stocks = self.fetch_stock_for(&transaction).await?;
+        let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
         Ok((transaction, stocks))
     }
 
@@ -73,7 +53,7 @@ impl TransactionService {
         tx_id: i64,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         let transaction = self.transaction_repo.find_by_id(portfolio_id, tx_id).await?;
-        let stocks = self.fetch_stock_for(&transaction).await?;
+        let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
         Ok((transaction, stocks))
     }
 
@@ -81,7 +61,7 @@ impl TransactionService {
         &self,
         portfolio_id: i32,
         query: TransactionsQuery,
-    ) -> Result<(Paginated<Transaction>, HashMap<i32, Stock>), AppError> {
+    ) -> Result<(Page<Transaction>, HashMap<i32, Stock>), AppError> {
         let has_filters = query.filters.transaction_type.is_some()
             || query.filters.stock_id.is_some()
             || query.filters.from_date.is_some()
@@ -95,10 +75,11 @@ impl TransactionService {
             self.transaction_repo.list_by_portfolio(portfolio_id).await?
         };
 
-        let sort_by = query.sort_by.as_deref().unwrap_or("executed_at");
-        let ascending = matches!(query.sort_dir.as_deref(), Some("asc"));
+        let ascending = query.sort_dir.as_deref() == Some("asc");
+        let tiebreaker = |a: &Transaction, b: &Transaction| a.id.cmp(&b.id);
+
         transactions.sort_by(|a, b| {
-            let ord = match sort_by {
+            let ord = match query.sort_by.as_deref().unwrap_or("executed_at") {
                 "amount" => a
                     .amount
                     .unwrap_or(0.0)
@@ -110,13 +91,14 @@ impl TransactionService {
                     .cmp(b.transaction_type.as_str()),
                 _ => a.executed_at.cmp(&b.executed_at),
             };
-            if ascending { ord } else { ord.reverse() }
+            let ord = if ascending { ord } else { ord.reverse() };
+            ord.then_with(|| tiebreaker(a, b))
         });
 
-        let page = query.page.unwrap_or(1);
-        let limit = query.limit.unwrap_or(25);
+        let page = query.page.unwrap_or(DEFAULT_PAGE);
+        let limit = query.limit.unwrap_or(DEFAULT_LIMIT);
         let paginated = paginate_slice(transactions, page, limit);
-        let stocks = self.fetch_stocks_for(&paginated.items).await?;
+        let stocks = fetch_stocks_for_transactions(&self.stock_repo, &paginated.items).await?;
         Ok((paginated, stocks))
     }
 
@@ -128,7 +110,7 @@ impl TransactionService {
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         Self::validate(&data)?;
         let transaction = self.transaction_repo.update(portfolio_id, tx_id, data).await?;
-        let stocks = self.fetch_stock_for(&transaction).await?;
+        let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
         Ok((transaction, stocks))
     }
 

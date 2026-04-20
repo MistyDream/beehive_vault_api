@@ -4,6 +4,7 @@ use garde_actix_web::error::Error as GardeError;
 
 use crate::application::error::AppError;
 use crate::infrastructure::http::dto::response::error_response::{FieldError, ProblemDetail};
+use crate::infrastructure::http::request_context::current_path;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -97,7 +98,7 @@ impl ResponseError for ApiError {
                 title,
                 status: status.as_u16(),
                 detail,
-                instance: None,
+                instance: current_path(),
                 errors,
             })
     }
