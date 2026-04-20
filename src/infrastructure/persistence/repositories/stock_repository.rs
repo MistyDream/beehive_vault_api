@@ -58,6 +58,27 @@ impl StockRepository for PgStockRepository {
         })
     }
 
+    fn find_by_ids(
+        &self,
+        stock_ids: Vec<i32>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            if stock_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.db
+                .exec(move |conn| {
+                    let rows = stocks::table
+                        .filter(stocks::id.eq_any(&stock_ids))
+                        .select(StockRow::as_select())
+                        .load(conn)?;
+                    Ok(rows.into_iter().map(Stock::from).collect())
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
     fn find_by_symbol(
         &self,
         symbol: String,

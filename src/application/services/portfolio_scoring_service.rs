@@ -5,6 +5,7 @@ use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
+use crate::application::services::stock_lookup::fetch_stocks_for_transactions;
 use crate::domain::wallet::portfolio_scoring::{PortfolioScoring, StockScore};
 use crate::domain::wallet::position::compute_positions;
 
@@ -30,7 +31,9 @@ impl PortfolioScoringService {
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
-        let positions = compute_positions(&transactions);
+
+        let stocks_by_id = fetch_stocks_for_transactions(&self.stock_repo, &transactions).await?;
+        let positions = compute_positions(&transactions, &stocks_by_id);
 
         if positions.is_empty() {
             return Ok(PortfolioScoring {
@@ -40,26 +43,23 @@ impl PortfolioScoringService {
             });
         }
 
-        let total_cost: f64 = positions.iter().map(|p| p.total_cost).sum();
         let mut stock_scores = Vec::with_capacity(positions.len());
         let mut weighted_sum = 0.0;
         let mut weighted_total = 0.0;
 
         for pos in &positions {
-            let weight = if total_cost > 0.0 { pos.total_cost / total_cost } else { 0.0 };
-            let stock = self.stock_repo.find_by_id(pos.stock_id).await?;
-            let snapshot = self.score_repo.find_latest_by_stock(pos.stock_id).await.ok();
+            let snapshot = self.score_repo.find_latest_by_stock(pos.stock.id).await.ok();
 
             if let Some(ref snap) = snapshot {
-                weighted_sum += weight * snap.global_score;
-                weighted_total += weight;
+                weighted_sum += pos.weight * snap.global_score;
+                weighted_total += pos.weight;
             }
 
             stock_scores.push(StockScore {
-                stock_id: pos.stock_id,
-                symbol: stock.symbol,
-                name: stock.name,
-                weight,
+                stock_id: pos.stock.id,
+                symbol: pos.stock.symbol.clone(),
+                name: pos.stock.name.clone(),
+                weight: pos.weight,
                 global_score: snapshot.as_ref().map(|s| s.global_score),
                 scored_at: snapshot.as_ref().map(|s| s.scored_at),
             });

@@ -1,13 +1,17 @@
-use actix_web::{HttpResponse, delete, get, post, put, web};
-use garde_actix_web::web::Json;
+use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
+use garde_actix_web::web::{Json, Query};
 
+use crate::application::services::transaction_service::TransactionsQuery;
 use crate::domain::wallet::transaction::TransactionFilter;
 use crate::infrastructure::http::dto::request::transaction_request::{
     CreateTransactionRequest, TransactionQueryParams, UpdateTransactionRequest,
 };
+use crate::infrastructure::http::dto::response::paginated_response::{build_link_header, PaginatedResponse};
 use crate::infrastructure::http::dto::response::transaction_response::TransactionResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
+
+const CACHE_CONTROL: &str = "private, max-age=30";
 
 #[post("/portfolios/{id}/transactions")]
 pub async fn create_transaction(
@@ -17,40 +21,54 @@ pub async fn create_transaction(
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
     let new = body.into_inner().into_new_transaction(portfolio_id);
-    let transaction = state.transaction_service.create(portfolio_id, new).await?;
+    let (transaction, stocks) = state.transaction_service.create(portfolio_id, new).await?;
 
     Ok(HttpResponse::Created()
         .insert_header(("Location", format!("/portfolios/{}/transactions/{}", portfolio_id, transaction.id)))
-        .json(TransactionResponse::from(transaction)))
+        .json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[get("/portfolios/{id}/transactions")]
 pub async fn list_transactions(
     state: web::Data<AppState>,
     path: web::Path<i32>,
-    query: web::Query<TransactionQueryParams>,
+    query: Query<TransactionQueryParams>,
+    request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
+    let q = query.into_inner();
 
-    let has_filters = query.transaction_type.is_some()
-        || query.stock_id.is_some()
-        || query.from_date.is_some()
-        || query.to_date.is_some();
-
-    let filters = if has_filters {
-        Some(TransactionFilter {
-            transaction_type: query.transaction_type.clone(),
-            stock_id: query.stock_id,
-            from_date: query.from_date,
-            to_date: query.to_date,
-        })
-    } else {
-        None
+    let tx_query = TransactionsQuery {
+        filters: TransactionFilter {
+            transaction_type: q.transaction_type,
+            stock_id: q.stock_id,
+            from_date: q.from_date,
+            to_date: q.to_date,
+        },
+        sort_by: q.sort_by,
+        sort_dir: q.sort_dir,
+        page: q.page,
+        limit: q.limit,
     };
 
-    let transactions = state.transaction_service.list(portfolio_id, filters).await?;
-    let response: Vec<TransactionResponse> = transactions.into_iter().map(TransactionResponse::from).collect();
-    Ok(HttpResponse::Ok().json(response))
+    let (page, stocks) = state.transaction_service.list_paginated(portfolio_id, tx_query).await?;
+    let response: PaginatedResponse<TransactionResponse> = PaginatedResponse::from(page)
+        .map(|t| TransactionResponse::from_transaction(t, &stocks));
+
+    let link = build_link_header(
+        request.path(),
+        request.query_string(),
+        response.page,
+        response.per_page,
+        response.total,
+    );
+
+    let mut builder = HttpResponse::Ok();
+    builder.insert_header(("Cache-Control", CACHE_CONTROL));
+    if let Some(link) = link {
+        builder.insert_header(("Link", link));
+    }
+    Ok(builder.json(response))
 }
 
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
@@ -59,8 +77,10 @@ pub async fn get_transaction(
     path: web::Path<(i32, i64)>,
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
-    let transaction = state.transaction_service.get(portfolio_id, tx_id).await?;
-    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
+    let (transaction, stocks) = state.transaction_service.get(portfolio_id, tx_id).await?;
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[put("/portfolios/{portfolio_id}/transactions/{tx_id}")]
@@ -71,8 +91,8 @@ pub async fn update_transaction(
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
     let data = body.into_inner().into_update_transaction(portfolio_id);
-    let transaction = state.transaction_service.update(portfolio_id, tx_id, data).await?;
-    Ok(HttpResponse::Ok().json(TransactionResponse::from(transaction)))
+    let (transaction, stocks) = state.transaction_service.update(portfolio_id, tx_id, data).await?;
+    Ok(HttpResponse::Ok().json(TransactionResponse::from_transaction(transaction, &stocks)))
 }
 
 #[delete("/portfolios/{portfolio_id}/transactions/{tx_id}")]

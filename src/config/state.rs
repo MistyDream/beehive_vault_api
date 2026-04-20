@@ -27,10 +27,12 @@ pub fn init() -> Result<AppState> {
     let transaction_service = Arc::new(TransactionService::new(
         portfolio_repo.clone(),
         transaction_repo.clone(),
+        stock_repo.clone(),
     ));
     let position_service = Arc::new(PositionService::new(
         portfolio_repo.clone(),
         transaction_repo.clone(),
+        stock_repo.clone(),
     ));
     let portfolio_scoring_service = Arc::new(PortfolioScoringService::new(
         portfolio_repo,
