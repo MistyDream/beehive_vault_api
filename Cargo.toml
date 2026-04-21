@@ -16,3 +16,7 @@ thiserror = "2"
 garde = { version = "0.22.1", features = ["derive", "regex"] }
 garde-actix-web = "0.12.0"
 actix-cors = "0.7.1"
+actix-governor = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-actix-web = "0.7"

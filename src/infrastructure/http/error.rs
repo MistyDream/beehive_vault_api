@@ -19,9 +19,12 @@ pub enum ApiError {
 
     #[error("Unsupported media type")]
     UnsupportedMediaType,
+
+    #[error("Payload too large")]
+    PayloadTooLarge(String),
 }
 
-pub fn garde_error_handler(err: GardeError, _req: &HttpRequest) -> actix_web::Error {
+pub fn garde_error_handler(err: GardeError, req: &HttpRequest) -> actix_web::Error {
     let api_error = match err {
         GardeError::ValidationError(report) => {
             let fields: Vec<FieldError> = report
@@ -34,9 +37,22 @@ pub fn garde_error_handler(err: GardeError, _req: &HttpRequest) -> actix_web::Er
             ApiError::Validation(fields)
         }
         GardeError::JsonPayloadError(JsonPayloadError::ContentType) => ApiError::UnsupportedMediaType,
+        GardeError::JsonPayloadError(e @ JsonPayloadError::OverflowKnownLength { .. }) => {
+            ApiError::PayloadTooLarge(e.to_string())
+        }
+        GardeError::JsonPayloadError(e @ JsonPayloadError::Overflow { .. }) => {
+            ApiError::PayloadTooLarge(e.to_string())
+        }
         GardeError::JsonPayloadError(e) => ApiError::BadRequest(e.to_string()),
         other => ApiError::BadRequest(other.to_string()),
     };
+
+    tracing::warn!(
+        method = %req.method(),
+        path = %req.path(),
+        error = %api_error,
+        "request rejected at validation"
+    );
 
     let response = api_error.error_response();
     InternalError::from_response(api_error, response).into()
@@ -54,6 +70,7 @@ impl ResponseError for ApiError {
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            ApiError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
         }
     }
 
@@ -80,7 +97,7 @@ impl ResponseError for ApiError {
                 None,
             ),
             ApiError::App(AppError::Internal(err)) => {
-                eprintln!("[ERROR] {err}");
+                tracing::error!(error = %err, "internal server error");
                 (
                     "/problems/internal",
                     "Internal Server Error".to_string(),
@@ -104,6 +121,12 @@ impl ResponseError for ApiError {
                 "/problems/unsupported-media-type",
                 "Unsupported Media Type".to_string(),
                 Some("Request Content-Type must be application/json".to_string()),
+                None,
+            ),
+            ApiError::PayloadTooLarge(msg) => (
+                "/problems/payload-too-large",
+                "Payload Too Large".to_string(),
+                Some(msg.clone()),
                 None,
             ),
         };

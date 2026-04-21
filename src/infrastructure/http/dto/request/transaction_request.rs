@@ -9,29 +9,29 @@ use crate::domain::wallet::transaction::{NewTransaction, UpdateTransaction};
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct CreateTransactionRequest {
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub stock_id: Option<i32>,
     #[garde(pattern(r"^(buy|sell|dividend|fee|split|deposit|withdrawal)$"))]
     pub transaction_type: String,
     #[garde(skip)]
     pub executed_at: NaiveDate,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub quantity: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub unit_price: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub amount: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e9)))]
     pub fees: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e9)))]
     pub tax: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub split_from: Option<i32>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub split_to: Option<i32>,
     #[garde(length(min = 3, max = 3))]
     pub currency: String,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.000001, max = 1e6)))]
     pub exchange_rate: Option<f64>,
     #[garde(length(max = 500))]
     pub notes: Option<String>,
@@ -40,29 +40,29 @@ pub struct CreateTransactionRequest {
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct UpdateTransactionRequest {
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub stock_id: Option<i32>,
     #[garde(pattern(r"^(buy|sell|dividend|fee|split|deposit|withdrawal)$"))]
     pub transaction_type: String,
     #[garde(skip)]
     pub executed_at: NaiveDate,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub quantity: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub unit_price: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e12)))]
     pub amount: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e9)))]
     pub fees: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.0, max = 1e9)))]
     pub tax: Option<f64>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub split_from: Option<i32>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub split_to: Option<i32>,
     #[garde(length(min = 3, max = 3))]
     pub currency: String,
-    #[garde(skip)]
+    #[garde(inner(range(min = 0.000001, max = 1e6)))]
     pub exchange_rate: Option<f64>,
     #[garde(length(max = 500))]
     pub notes: Option<String>,
@@ -73,7 +73,7 @@ pub struct UpdateTransactionRequest {
 pub struct TransactionQueryParams {
     #[garde(inner(pattern(r"^(buy|sell|dividend|fee|split|deposit|withdrawal)(,(buy|sell|dividend|fee|split|deposit|withdrawal))*$")))]
     pub transaction_types: Option<String>,
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub stock_id: Option<i32>,
     #[garde(skip)]
     pub from_date: Option<NaiveDate>,
@@ -92,7 +92,7 @@ pub struct TransactionQueryParams {
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct TransactionStatsQueryParams {
-    #[garde(skip)]
+    #[garde(inner(range(min = 1)))]
     pub stock_id: Option<i32>,
     #[garde(skip)]
     pub from_date: Option<NaiveDate>,
