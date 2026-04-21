@@ -2,6 +2,22 @@ pub const DEFAULT_PAGE: u32 = 1;
 pub const DEFAULT_LIMIT: u32 = 25;
 pub const MAX_LIMIT: u32 = 100;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SortDirection {
+    Asc,
+    #[default]
+    Desc,
+}
+
+impl SortDirection {
+    pub fn parse(value: Option<&str>) -> Self {
+        match value {
+            Some("asc") => SortDirection::Asc,
+            _ => SortDirection::Desc,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Page<T> {
     pub items: Vec<T>,

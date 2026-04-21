@@ -6,7 +6,7 @@ use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
-use crate::application::services::pagination::{paginate_slice, Page, DEFAULT_LIMIT, DEFAULT_PAGE};
+use crate::application::services::pagination::{paginate_slice, Page, SortDirection, DEFAULT_LIMIT, DEFAULT_PAGE};
 use crate::application::services::stock_lookup::fetch_stocks_for_transactions;
 use crate::domain::wallet::cash_balance::{compute_cash_balance, CashBalance};
 use crate::domain::wallet::performance::{compute_performance, PerformanceReport};
@@ -14,10 +14,32 @@ use crate::domain::wallet::portfolio_summary::PortfolioSummary;
 use crate::domain::wallet::position::{compute_positions, Position};
 use crate::domain::wallet::transaction::TransactionFilter;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PositionSort {
+    #[default]
+    Weight,
+    Symbol,
+    Quantity,
+    AverageCost,
+    TotalCost,
+}
+
+impl PositionSort {
+    pub fn parse(value: Option<&str>) -> Self {
+        match value {
+            Some("symbol") => PositionSort::Symbol,
+            Some("quantity") => PositionSort::Quantity,
+            Some("average_cost") => PositionSort::AverageCost,
+            Some("total_cost") => PositionSort::TotalCost,
+            _ => PositionSort::Weight,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct PositionsQuery {
-    pub sort_by: Option<String>,
-    pub sort_dir: Option<String>,
+    pub sort_by: PositionSort,
+    pub sort_dir: SortDirection,
     pub page: Option<u32>,
     pub limit: Option<u32>,
 }
@@ -52,16 +74,16 @@ impl PositionService {
     ) -> Result<Page<Position>, AppError> {
         let mut positions = self.get_positions(portfolio_id).await?;
 
-        let ascending = query.sort_dir.as_deref() == Some("asc");
+        let ascending = query.sort_dir == SortDirection::Asc;
         let tiebreaker = |a: &Position, b: &Position| a.stock.id.cmp(&b.stock.id);
 
         positions.sort_by(|a, b| {
-            let ord = match query.sort_by.as_deref().unwrap_or("weight") {
-                "symbol" => a.stock.symbol.cmp(&b.stock.symbol),
-                "quantity" => a.quantity.partial_cmp(&b.quantity).unwrap_or(std::cmp::Ordering::Equal),
-                "average_cost" => a.average_cost.partial_cmp(&b.average_cost).unwrap_or(std::cmp::Ordering::Equal),
-                "total_cost" => a.total_cost.partial_cmp(&b.total_cost).unwrap_or(std::cmp::Ordering::Equal),
-                _ => a.weight.partial_cmp(&b.weight).unwrap_or(std::cmp::Ordering::Equal),
+            let ord = match query.sort_by {
+                PositionSort::Symbol => a.stock.symbol.cmp(&b.stock.symbol),
+                PositionSort::Quantity => a.quantity.partial_cmp(&b.quantity).unwrap_or(std::cmp::Ordering::Equal),
+                PositionSort::AverageCost => a.average_cost.partial_cmp(&b.average_cost).unwrap_or(std::cmp::Ordering::Equal),
+                PositionSort::TotalCost => a.total_cost.partial_cmp(&b.total_cost).unwrap_or(std::cmp::Ordering::Equal),
+                PositionSort::Weight => a.weight.partial_cmp(&b.weight).unwrap_or(std::cmp::Ordering::Equal),
             };
             let ord = if ascending { ord } else { ord.reverse() };
             ord.then_with(|| tiebreaker(a, b))
@@ -101,10 +123,9 @@ impl PositionService {
         let portfolio = self.portfolio_repo.find_by_id(portfolio_id).await?;
         let transactions = if from_date.is_some() || to_date.is_some() {
             let filters = TransactionFilter {
-                transaction_type: None,
-                stock_id: None,
                 from_date,
                 to_date,
+                ..Default::default()
             };
             self.transaction_repo
                 .list_by_portfolio_filtered(portfolio_id, filters)

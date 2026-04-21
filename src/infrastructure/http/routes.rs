@@ -10,8 +10,8 @@ use crate::infrastructure::http::controllers::position_controller::{
     get_cash_balance, get_portfolio_summary, get_positions,
 };
 use crate::infrastructure::http::controllers::transaction_controller::{
-    create_transaction, delete_transaction, get_transaction, list_transactions,
-    update_transaction,
+    create_transaction, delete_transaction, get_transaction, get_transactions_stats,
+    list_transactions, update_transaction,
 };
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
@@ -23,6 +23,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(delete_portfolio);
     cfg.service(create_transaction);
     cfg.service(list_transactions);
+    cfg.service(get_transactions_stats);
     cfg.service(get_transaction);
     cfg.service(update_transaction);
     cfg.service(delete_transaction);
