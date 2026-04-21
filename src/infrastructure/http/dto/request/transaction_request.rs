@@ -2,6 +2,7 @@ use chrono::NaiveDate;
 use garde::Validate;
 use serde::Deserialize;
 
+use crate::application::error::AppError;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::{NewTransaction, UpdateTransaction};
 
@@ -108,13 +109,17 @@ pub struct PerformanceQueryParams {
     pub to_date: Option<NaiveDate>,
 }
 
+fn parse_transaction_type(value: &str) -> Result<TransactionType, AppError> {
+    TransactionType::try_from(value)
+        .map_err(|_| AppError::BadRequest(format!("Invalid transaction_type: {value}")))
+}
+
 impl CreateTransactionRequest {
-    pub fn into_new_transaction(self, portfolio_id: i32) -> NewTransaction {
-        NewTransaction {
+    pub fn into_new_transaction(self, portfolio_id: i32) -> Result<NewTransaction, AppError> {
+        Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,
-            // Safe: garde validated the pattern
-            transaction_type: TransactionType::try_from(self.transaction_type.as_str()).unwrap(),
+            transaction_type: parse_transaction_type(&self.transaction_type)?,
             executed_at: self.executed_at,
             quantity: self.quantity,
             unit_price: self.unit_price,
@@ -126,16 +131,16 @@ impl CreateTransactionRequest {
             currency: self.currency,
             exchange_rate: self.exchange_rate.unwrap_or(1.0),
             notes: self.notes,
-        }
+        })
     }
 }
 
 impl UpdateTransactionRequest {
-    pub fn into_update_transaction(self, portfolio_id: i32) -> UpdateTransaction {
-        NewTransaction {
+    pub fn into_update_transaction(self, portfolio_id: i32) -> Result<UpdateTransaction, AppError> {
+        Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,
-            transaction_type: TransactionType::try_from(self.transaction_type.as_str()).unwrap(),
+            transaction_type: parse_transaction_type(&self.transaction_type)?,
             executed_at: self.executed_at,
             quantity: self.quantity,
             unit_price: self.unit_price,
@@ -147,6 +152,6 @@ impl UpdateTransactionRequest {
             currency: self.currency,
             exchange_rate: self.exchange_rate.unwrap_or(1.0),
             notes: self.notes,
-        }
+        })
     }
 }

@@ -18,7 +18,8 @@ pub async fn run(state: AppState) -> Result<()> {
     let app = move || {
         let mut cors = Cors::default()
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
-            .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT])
+            .allowed_headers(vec![http::header::CONTENT_TYPE, http::header::ACCEPT, http::header::IF_NONE_MATCH])
+            .expose_headers(vec![http::header::LOCATION, http::header::ETAG])
             .supports_credentials()
             .max_age(3600);
 
@@ -35,7 +36,7 @@ pub async fn run(state: AppState) -> Result<()> {
                 REQUEST_PATH.scope(path, srv.call(req))
             })
             .wrap(cors)
-            .configure(configure_routes)
+            .service(web::scope("/v1").configure(configure_routes))
     };
 
     HttpServer::new(app)

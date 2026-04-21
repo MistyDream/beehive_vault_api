@@ -1,9 +1,9 @@
-use actix_web::{HttpRequest, HttpResponse, get, web};
+use actix_web::{HttpResponse, get, web};
 use garde_actix_web::web::Query;
 
 use crate::application::services::position_service::PositionsQuery;
 use crate::infrastructure::http::dto::request::position_request::PositionsQueryParams;
-use crate::infrastructure::http::dto::response::paginated_response::{build_link_header, PaginatedResponse};
+use crate::infrastructure::http::dto::response::paginated_response::PaginatedResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
 
@@ -14,7 +14,6 @@ pub async fn get_positions(
     state: web::Data<AppState>,
     path: web::Path<i32>,
     query: Query<PositionsQueryParams>,
-    request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
     let q = query.into_inner();
     let page = state
@@ -31,20 +30,9 @@ pub async fn get_positions(
         .await?;
 
     let response: PaginatedResponse<_> = page.into();
-    let link = build_link_header(
-        request.path(),
-        request.query_string(),
-        response.page,
-        response.per_page,
-        response.total,
-    );
-
-    let mut builder = HttpResponse::Ok();
-    builder.insert_header(("Cache-Control", CACHE_CONTROL));
-    if let Some(link) = link {
-        builder.insert_header(("Link", link));
-    }
-    Ok(builder.json(response))
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .json(response))
 }
 
 #[get("/portfolios/{id}/cash")]

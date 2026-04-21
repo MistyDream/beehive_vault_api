@@ -18,7 +18,7 @@ pub async fn create_portfolio(
     let portfolio = state.portfolio_service.create(new).await?;
 
     Ok(HttpResponse::Created()
-        .insert_header(("Location", format!("/portfolios/{}", portfolio.id)))
+        .insert_header(("Location", format!("/v1/portfolios/{}", portfolio.id)))
         .json(PortfolioResponse::from(portfolio)))
 }
 

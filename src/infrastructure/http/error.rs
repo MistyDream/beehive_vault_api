@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse, ResponseError, http::StatusCode};
-use actix_web::error::InternalError;
+use actix_web::error::{InternalError, JsonPayloadError};
 use garde_actix_web::error::Error as GardeError;
 
 use crate::application::error::AppError;
@@ -16,6 +16,9 @@ pub enum ApiError {
 
     #[error("Invalid request body")]
     BadRequest(String),
+
+    #[error("Unsupported media type")]
+    UnsupportedMediaType,
 }
 
 pub fn garde_error_handler(err: GardeError, _req: &HttpRequest) -> actix_web::Error {
@@ -30,6 +33,7 @@ pub fn garde_error_handler(err: GardeError, _req: &HttpRequest) -> actix_web::Er
                 .collect();
             ApiError::Validation(fields)
         }
+        GardeError::JsonPayloadError(JsonPayloadError::ContentType) => ApiError::UnsupportedMediaType,
         GardeError::JsonPayloadError(e) => ApiError::BadRequest(e.to_string()),
         other => ApiError::BadRequest(other.to_string()),
     };
@@ -49,24 +53,28 @@ impl ResponseError for ApiError {
             },
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            ApiError::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
         }
     }
 
     fn error_response(&self) -> HttpResponse {
         let status = self.status_code();
 
-        let (title, detail, errors) = match self {
+        let (problem_type, title, detail, errors) = match self {
             ApiError::App(AppError::NotFound) => (
+                "/problems/not-found",
                 "Not Found".to_string(),
                 Some("The requested resource was not found".to_string()),
                 None,
             ),
             ApiError::App(AppError::BadRequest(msg)) => (
+                "/problems/bad-request",
                 "Bad Request".to_string(),
                 Some(msg.clone()),
                 None,
             ),
             ApiError::App(AppError::Conflict(msg)) => (
+                "/problems/conflict",
                 "Conflict".to_string(),
                 Some(msg.clone()),
                 None,
@@ -74,19 +82,28 @@ impl ResponseError for ApiError {
             ApiError::App(AppError::Internal(err)) => {
                 eprintln!("[ERROR] {err}");
                 (
+                    "/problems/internal",
                     "Internal Server Error".to_string(),
                     None,
                     None,
                 )
             }
             ApiError::Validation(fields) => (
+                "/problems/validation",
                 "Validation Error".to_string(),
                 Some("One or more fields are invalid".to_string()),
                 Some(fields.clone()),
             ),
             ApiError::BadRequest(msg) => (
+                "/problems/bad-request",
                 "Bad Request".to_string(),
                 Some(msg.clone()),
+                None,
+            ),
+            ApiError::UnsupportedMediaType => (
+                "/problems/unsupported-media-type",
+                "Unsupported Media Type".to_string(),
+                Some("Request Content-Type must be application/json".to_string()),
                 None,
             ),
         };
@@ -94,7 +111,7 @@ impl ResponseError for ApiError {
         HttpResponse::build(status)
             .content_type("application/problem+json")
             .json(ProblemDetail {
-                problem_type: "about:blank".to_string(),
+                problem_type: problem_type.to_string(),
                 title,
                 status: status.as_u16(),
                 detail,
