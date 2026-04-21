@@ -70,8 +70,8 @@ pub struct UpdateTransactionRequest {
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct TransactionQueryParams {
-    #[garde(inner(pattern(r"^(buy|sell|dividend|fee|split|deposit|withdrawal)$")))]
-    pub transaction_type: Option<String>,
+    #[garde(inner(pattern(r"^(buy|sell|dividend|fee|split|deposit|withdrawal)(,(buy|sell|dividend|fee|split|deposit|withdrawal))*$")))]
+    pub transaction_types: Option<String>,
     #[garde(skip)]
     pub stock_id: Option<i32>,
     #[garde(skip)]
@@ -86,6 +86,17 @@ pub struct TransactionQueryParams {
     pub page: Option<u32>,
     #[garde(inner(range(min = 1, max = 100)))]
     pub limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+#[garde(context(()))]
+pub struct TransactionStatsQueryParams {
+    #[garde(skip)]
+    pub stock_id: Option<i32>,
+    #[garde(skip)]
+    pub from_date: Option<NaiveDate>,
+    #[garde(skip)]
+    pub to_date: Option<NaiveDate>,
 }
 
 #[derive(Debug, Deserialize, Validate)]

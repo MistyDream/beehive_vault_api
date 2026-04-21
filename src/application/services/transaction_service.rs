@@ -20,6 +20,18 @@ pub struct TransactionsQuery {
     pub limit: Option<u32>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct TransactionStats {
+    pub total: u64,
+    pub buy: u64,
+    pub sell: u64,
+    pub dividend: u64,
+    pub fee: u64,
+    pub split: u64,
+    pub deposit: u64,
+    pub withdrawal: u64,
+}
+
 pub struct TransactionService {
     portfolio_repo: Arc<dyn PortfolioRepository>,
     transaction_repo: Arc<dyn TransactionRepository>,
@@ -62,7 +74,7 @@ impl TransactionService {
         portfolio_id: i32,
         query: TransactionsQuery,
     ) -> Result<(Page<Transaction>, HashMap<i32, Stock>), AppError> {
-        let has_filters = query.filters.transaction_type.is_some()
+        let has_filters = !query.filters.transaction_types.is_empty()
             || query.filters.stock_id.is_some()
             || query.filters.from_date.is_some()
             || query.filters.to_date.is_some();
@@ -100,6 +112,46 @@ impl TransactionService {
         let paginated = paginate_slice(transactions, page, limit);
         let stocks = fetch_stocks_for_transactions(&self.stock_repo, &paginated.items).await?;
         Ok((paginated, stocks))
+    }
+
+    pub async fn stats(
+        &self,
+        portfolio_id: i32,
+        stock_id: Option<i32>,
+        from_date: Option<chrono::NaiveDate>,
+        to_date: Option<chrono::NaiveDate>,
+    ) -> Result<TransactionStats, AppError> {
+        self.portfolio_repo.find_by_id(portfolio_id).await?;
+
+        let has_filters = stock_id.is_some() || from_date.is_some() || to_date.is_some();
+        let transactions = if has_filters {
+            let filters = TransactionFilter {
+                transaction_types: Vec::new(),
+                stock_id,
+                from_date,
+                to_date,
+            };
+            self.transaction_repo
+                .list_by_portfolio_filtered(portfolio_id, filters)
+                .await?
+        } else {
+            self.transaction_repo.list_by_portfolio(portfolio_id).await?
+        };
+
+        let mut stats = TransactionStats::default();
+        for tx in &transactions {
+            match tx.transaction_type {
+                TransactionType::Buy => stats.buy += 1,
+                TransactionType::Sell => stats.sell += 1,
+                TransactionType::Dividend => stats.dividend += 1,
+                TransactionType::Fee => stats.fee += 1,
+                TransactionType::Split => stats.split += 1,
+                TransactionType::Deposit => stats.deposit += 1,
+                TransactionType::Withdrawal => stats.withdrawal += 1,
+            }
+        }
+        stats.total = transactions.len() as u64;
+        Ok(stats)
     }
 
     pub async fn update(

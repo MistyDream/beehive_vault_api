@@ -101,7 +101,7 @@ impl PositionService {
         let portfolio = self.portfolio_repo.find_by_id(portfolio_id).await?;
         let transactions = if from_date.is_some() || to_date.is_some() {
             let filters = TransactionFilter {
-                transaction_type: None,
+                transaction_types: Vec::new(),
                 stock_id: None,
                 from_date,
                 to_date,

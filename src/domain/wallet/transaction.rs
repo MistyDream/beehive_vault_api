@@ -43,7 +43,7 @@ pub type UpdateTransaction = NewTransaction;
 
 #[derive(Debug, Default, Clone)]
 pub struct TransactionFilter {
-    pub transaction_type: Option<String>,
+    pub transaction_types: Vec<String>,
     pub stock_id: Option<i32>,
     pub from_date: Option<NaiveDate>,
     pub to_date: Option<NaiveDate>,

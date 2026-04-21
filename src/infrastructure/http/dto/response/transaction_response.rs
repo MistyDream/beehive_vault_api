@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 use serde::Serialize;
 
+use crate::application::services::transaction_service::TransactionStats;
 use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
@@ -45,6 +46,40 @@ impl TransactionResponse {
             currency: t.currency,
             exchange_rate: t.exchange_rate,
             notes: t.notes,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct TransactionStatsByType {
+    pub buy: u64,
+    pub sell: u64,
+    pub dividend: u64,
+    pub fee: u64,
+    pub split: u64,
+    pub deposit: u64,
+    pub withdrawal: u64,
+}
+
+#[derive(Serialize)]
+pub struct TransactionStatsResponse {
+    pub total: u64,
+    pub by_type: TransactionStatsByType,
+}
+
+impl From<TransactionStats> for TransactionStatsResponse {
+    fn from(s: TransactionStats) -> Self {
+        TransactionStatsResponse {
+            total: s.total,
+            by_type: TransactionStatsByType {
+                buy: s.buy,
+                sell: s.sell,
+                dividend: s.dividend,
+                fee: s.fee,
+                split: s.split,
+                deposit: s.deposit,
+                withdrawal: s.withdrawal,
+            },
         }
     }
 }

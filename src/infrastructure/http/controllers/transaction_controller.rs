@@ -4,10 +4,13 @@ use garde_actix_web::web::{Json, Query};
 use crate::application::services::transaction_service::TransactionsQuery;
 use crate::domain::wallet::transaction::TransactionFilter;
 use crate::infrastructure::http::dto::request::transaction_request::{
-    CreateTransactionRequest, TransactionQueryParams, UpdateTransactionRequest,
+    CreateTransactionRequest, TransactionQueryParams, TransactionStatsQueryParams,
+    UpdateTransactionRequest,
 };
 use crate::infrastructure::http::dto::response::paginated_response::{build_link_header, PaginatedResponse};
-use crate::infrastructure::http::dto::response::transaction_response::TransactionResponse;
+use crate::infrastructure::http::dto::response::transaction_response::{
+    TransactionResponse, TransactionStatsResponse,
+};
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
 
@@ -38,9 +41,19 @@ pub async fn list_transactions(
     let portfolio_id = path.into_inner();
     let q = query.into_inner();
 
+    let transaction_types = q
+        .transaction_types
+        .map(|csv| {
+            csv.split(',')
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_owned())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
     let tx_query = TransactionsQuery {
         filters: TransactionFilter {
-            transaction_type: q.transaction_type,
+            transaction_types,
             stock_id: q.stock_id,
             from_date: q.from_date,
             to_date: q.to_date,
@@ -69,6 +82,23 @@ pub async fn list_transactions(
         builder.insert_header(("Link", link));
     }
     Ok(builder.json(response))
+}
+
+#[get("/portfolios/{id}/transactions/stats")]
+pub async fn get_transactions_stats(
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+    query: Query<TransactionStatsQueryParams>,
+) -> Result<HttpResponse, ApiError> {
+    let portfolio_id = path.into_inner();
+    let q = query.into_inner();
+    let stats = state
+        .transaction_service
+        .stats(portfolio_id, q.stock_id, q.from_date, q.to_date)
+        .await?;
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .json(TransactionStatsResponse::from(stats)))
 }
 
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
