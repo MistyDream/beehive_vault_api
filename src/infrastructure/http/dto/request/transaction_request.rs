@@ -109,17 +109,13 @@ pub struct PerformanceQueryParams {
     pub to_date: Option<NaiveDate>,
 }
 
-fn parse_transaction_type(value: &str) -> Result<TransactionType, AppError> {
-    TransactionType::try_from(value)
-        .map_err(|_| AppError::BadRequest(format!("Invalid transaction_type: {value}")))
-}
-
 impl CreateTransactionRequest {
     pub fn into_new_transaction(self, portfolio_id: i32) -> Result<NewTransaction, AppError> {
         Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,
-            transaction_type: parse_transaction_type(&self.transaction_type)?,
+            transaction_type: TransactionType::try_from(self.transaction_type.as_str())
+                .map_err(AppError::BadRequest)?,
             executed_at: self.executed_at,
             quantity: self.quantity,
             unit_price: self.unit_price,
@@ -140,7 +136,8 @@ impl UpdateTransactionRequest {
         Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,
-            transaction_type: parse_transaction_type(&self.transaction_type)?,
+            transaction_type: TransactionType::try_from(self.transaction_type.as_str())
+                .map_err(AppError::BadRequest)?,
             executed_at: self.executed_at,
             quantity: self.quantity,
             unit_price: self.unit_price,

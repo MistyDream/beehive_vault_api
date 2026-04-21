@@ -144,10 +144,10 @@ impl TransactionService {
         let has_filters = stock_id.is_some() || from_date.is_some() || to_date.is_some();
         let transactions = if has_filters {
             let filters = TransactionFilter {
-                transaction_types: Vec::new(),
                 stock_id,
                 from_date,
                 to_date,
+                ..Default::default()
             };
             self.transaction_repo
                 .list_by_portfolio_filtered(portfolio_id, filters)

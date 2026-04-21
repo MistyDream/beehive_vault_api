@@ -7,8 +7,7 @@ use crate::infrastructure::http::dto::request::position_request::PositionsQueryP
 use crate::infrastructure::http::dto::response::paginated_response::PaginatedResponse;
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::state::AppState;
-
-const CACHE_CONTROL: &str = "private, max-age=30";
+use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 
 #[get("/portfolios/{id}/positions")]
 pub async fn get_positions(
@@ -32,7 +31,7 @@ pub async fn get_positions(
 
     let response: PaginatedResponse<_> = page.into();
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .insert_header(("Cache-Control", PRIVATE_SHORT_CACHE))
         .json(response))
 }
 
@@ -43,7 +42,7 @@ pub async fn get_cash_balance(
 ) -> Result<HttpResponse, ApiError> {
     let cash = state.position_service.get_cash_balance(path.into_inner()).await?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .insert_header(("Cache-Control", PRIVATE_SHORT_CACHE))
         .json(cash))
 }
 
@@ -54,6 +53,6 @@ pub async fn get_portfolio_summary(
 ) -> Result<HttpResponse, ApiError> {
     let summary = state.position_service.get_summary(path.into_inner()).await?;
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .insert_header(("Cache-Control", PRIVATE_SHORT_CACHE))
         .json(summary))
 }

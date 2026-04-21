@@ -17,8 +17,7 @@ use crate::infrastructure::http::dto::response::transaction_response::{
 use crate::infrastructure::http::error::ApiError;
 use crate::infrastructure::http::etag::respond_with_etag;
 use crate::infrastructure::http::state::AppState;
-
-const CACHE_CONTROL: &str = "private, max-age=30";
+use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 
 #[post("/portfolios/{portfolio_id}/transactions")]
 pub async fn create_transaction(
@@ -75,7 +74,7 @@ pub async fn list_transactions(
         .map(|t| TransactionResponse::from_transaction(t, &stocks));
 
     Ok(HttpResponse::Ok()
-        .insert_header(("Cache-Control", CACHE_CONTROL))
+        .insert_header(("Cache-Control", PRIVATE_SHORT_CACHE))
         .json(response))
 }
 
@@ -92,7 +91,7 @@ pub async fn get_transactions_stats(
         .transaction_service
         .stats(portfolio_id, q.stock_id, q.from_date, q.to_date)
         .await?;
-    respond_with_etag(&request, &TransactionStatsResponse::from(stats), CACHE_CONTROL)
+    respond_with_etag(&request, &TransactionStatsResponse::from(stats), PRIVATE_SHORT_CACHE)
 }
 
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
@@ -104,7 +103,7 @@ pub async fn get_transaction(
     let (portfolio_id, tx_id) = path.into_inner();
     let (transaction, stocks) = state.transaction_service.get(portfolio_id, tx_id).await?;
     let response = TransactionResponse::from_transaction(transaction, &stocks);
-    respond_with_etag(&request, &response, CACHE_CONTROL)
+    respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)
 }
 
 #[put("/portfolios/{portfolio_id}/transactions/{tx_id}")]

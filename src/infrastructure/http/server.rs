@@ -20,6 +20,8 @@ pub async fn run(state: AppState) -> Result<()> {
     let cors_config = settings::get().cors.clone();
     let app_state = web::Data::new(state);
 
+    // Per-worker limit: actix-governor does not share state across workers,
+    // so effective global ceiling is `workers × requests_per_second`.
     let governor_conf = GovernorConfigBuilder::default()
         .requests_per_second(60)
         .burst_size(30)

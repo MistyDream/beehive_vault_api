@@ -34,9 +34,7 @@ pub fn init() -> Result<&'static Config> {
 
     let database_url = env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 
-    // Default covers local dev (frontend via nginx/hosts at beehive-vault.fr
-    // and default Nuxt port). Production MUST override CORS_ALLOWED_ORIGINS
-    // with explicit HTTPS origins.
+    // Production MUST override CORS_ALLOWED_ORIGINS with explicit HTTPS origins.
     let allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
         .unwrap_or_else(|_| "http://beehive-vault.fr,http://localhost:3000".to_string())
         .split(',')

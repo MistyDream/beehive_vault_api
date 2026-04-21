@@ -14,9 +14,6 @@ pub enum ApiError {
     #[error("Validation failed")]
     Validation(Vec<FieldError>),
 
-    #[error("Invalid request body")]
-    BadRequest(String),
-
     #[error("Unsupported media type")]
     UnsupportedMediaType,
 
@@ -37,14 +34,11 @@ pub fn garde_error_handler(err: GardeError, req: &HttpRequest) -> actix_web::Err
             ApiError::Validation(fields)
         }
         GardeError::JsonPayloadError(JsonPayloadError::ContentType) => ApiError::UnsupportedMediaType,
-        GardeError::JsonPayloadError(e @ JsonPayloadError::OverflowKnownLength { .. }) => {
-            ApiError::PayloadTooLarge(e.to_string())
-        }
-        GardeError::JsonPayloadError(e @ JsonPayloadError::Overflow { .. }) => {
-            ApiError::PayloadTooLarge(e.to_string())
-        }
-        GardeError::JsonPayloadError(e) => ApiError::BadRequest(e.to_string()),
-        other => ApiError::BadRequest(other.to_string()),
+        GardeError::JsonPayloadError(
+            e @ (JsonPayloadError::OverflowKnownLength { .. } | JsonPayloadError::Overflow { .. }),
+        ) => ApiError::PayloadTooLarge(e.to_string()),
+        GardeError::JsonPayloadError(e) => AppError::BadRequest(e.to_string()).into(),
+        other => AppError::BadRequest(other.to_string()).into(),
     };
 
     tracing::warn!(
@@ -68,7 +62,6 @@ impl ResponseError for ApiError {
                 AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             },
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
-            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ApiError::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             ApiError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
         }
@@ -110,12 +103,6 @@ impl ResponseError for ApiError {
                 "Validation Error".to_string(),
                 Some("One or more fields are invalid".to_string()),
                 Some(fields.clone()),
-            ),
-            ApiError::BadRequest(msg) => (
-                "/problems/bad-request",
-                "Bad Request".to_string(),
-                Some(msg.clone()),
-                None,
             ),
             ApiError::UnsupportedMediaType => (
                 "/problems/unsupported-media-type",
