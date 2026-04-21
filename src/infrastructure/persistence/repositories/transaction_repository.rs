@@ -100,9 +100,12 @@ impl TransactionRepository for PgTransactionRepository {
                         .into_boxed();
 
                     if !filters.transaction_types.is_empty() {
-                        query = query.filter(
-                            transactions::transaction_type.eq_any(filters.transaction_types.clone()),
-                        );
+                        let as_strs: Vec<&str> = filters
+                            .transaction_types
+                            .iter()
+                            .map(|t| t.as_str())
+                            .collect();
+                        query = query.filter(transactions::transaction_type.eq_any(as_strs));
                     }
                     if let Some(sid) = filters.stock_id {
                         query = query.filter(transactions::stock_id.eq(sid));

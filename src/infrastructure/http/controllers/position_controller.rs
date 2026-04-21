@@ -1,7 +1,8 @@
 use actix_web::{HttpResponse, get, web};
 use garde_actix_web::web::Query;
 
-use crate::application::services::position_service::PositionsQuery;
+use crate::application::services::pagination::SortDirection;
+use crate::application::services::position_service::{PositionSort, PositionsQuery};
 use crate::infrastructure::http::dto::request::position_request::PositionsQueryParams;
 use crate::infrastructure::http::dto::response::paginated_response::PaginatedResponse;
 use crate::infrastructure::http::error::ApiError;
@@ -21,8 +22,8 @@ pub async fn get_positions(
         .get_positions_paginated(
             path.into_inner(),
             PositionsQuery {
-                sort_by: q.sort_by,
-                sort_dir: q.sort_dir,
+                sort_by: PositionSort::parse(q.sort_by.as_deref()),
+                sort_dir: SortDirection::parse(q.sort_dir.as_deref()),
                 page: q.page,
                 limit: q.limit,
             },

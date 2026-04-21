@@ -1,7 +1,10 @@
 use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
 use garde_actix_web::web::{Json, Query};
 
-use crate::application::services::transaction_service::TransactionsQuery;
+use crate::application::error::AppError;
+use crate::application::services::pagination::SortDirection;
+use crate::application::services::transaction_service::{TransactionSort, TransactionsQuery};
+use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::TransactionFilter;
 use crate::infrastructure::http::dto::request::transaction_request::{
     CreateTransactionRequest, TransactionQueryParams, TransactionStatsQueryParams,
@@ -41,14 +44,17 @@ pub async fn list_transactions(
     let portfolio_id = path.into_inner();
     let q = query.into_inner();
 
-    let transaction_types = q
+    let transaction_types: Vec<TransactionType> = q
         .transaction_types
+        .as_deref()
         .map(|csv| {
             csv.split(',')
                 .filter(|s| !s.is_empty())
-                .map(|s| s.to_owned())
-                .collect::<Vec<_>>()
+                .map(TransactionType::try_from)
+                .collect::<Result<Vec<_>, _>>()
         })
+        .transpose()
+        .map_err(|msg| AppError::BadRequest(format!("invalid transaction_types: {msg}")))?
         .unwrap_or_default();
 
     let tx_query = TransactionsQuery {
@@ -58,8 +64,8 @@ pub async fn list_transactions(
             from_date: q.from_date,
             to_date: q.to_date,
         },
-        sort_by: q.sort_by,
-        sort_dir: q.sort_dir,
+        sort_by: TransactionSort::parse(q.sort_by.as_deref()),
+        sort_dir: SortDirection::parse(q.sort_dir.as_deref()),
         page: q.page,
         limit: q.limit,
     };

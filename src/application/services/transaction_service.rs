@@ -5,17 +5,35 @@ use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
-use crate::application::services::pagination::{paginate_slice, Page, DEFAULT_LIMIT, DEFAULT_PAGE};
+use crate::application::services::pagination::{paginate_slice, Page, SortDirection, DEFAULT_LIMIT, DEFAULT_PAGE};
 use crate::application::services::stock_lookup::{fetch_stock_by_id_optional, fetch_stocks_for_transactions};
 use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::{NewTransaction, Transaction, TransactionFilter, UpdateTransaction};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TransactionSort {
+    #[default]
+    ExecutedAt,
+    Amount,
+    TransactionType,
+}
+
+impl TransactionSort {
+    pub fn parse(value: Option<&str>) -> Self {
+        match value {
+            Some("amount") => TransactionSort::Amount,
+            Some("transaction_type") => TransactionSort::TransactionType,
+            _ => TransactionSort::ExecutedAt,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub struct TransactionsQuery {
     pub filters: TransactionFilter,
-    pub sort_by: Option<String>,
-    pub sort_dir: Option<String>,
+    pub sort_by: TransactionSort,
+    pub sort_dir: SortDirection,
     pub page: Option<u32>,
     pub limit: Option<u32>,
 }
@@ -53,7 +71,7 @@ impl TransactionService {
         new: NewTransaction,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         self.portfolio_repo.find_by_id(portfolio_id).await?;
-        Self::validate(&new)?;
+        new.check_invariants().map_err(AppError::BadRequest)?;
         let transaction = self.transaction_repo.insert(new).await?;
         let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
         Ok((transaction, stocks))
@@ -87,21 +105,21 @@ impl TransactionService {
             self.transaction_repo.list_by_portfolio(portfolio_id).await?
         };
 
-        let ascending = query.sort_dir.as_deref() == Some("asc");
+        let ascending = query.sort_dir == SortDirection::Asc;
         let tiebreaker = |a: &Transaction, b: &Transaction| a.id.cmp(&b.id);
 
         transactions.sort_by(|a, b| {
-            let ord = match query.sort_by.as_deref().unwrap_or("executed_at") {
-                "amount" => a
+            let ord = match query.sort_by {
+                TransactionSort::Amount => a
                     .amount
                     .unwrap_or(0.0)
                     .partial_cmp(&b.amount.unwrap_or(0.0))
                     .unwrap_or(std::cmp::Ordering::Equal),
-                "transaction_type" => a
+                TransactionSort::TransactionType => a
                     .transaction_type
                     .as_str()
                     .cmp(b.transaction_type.as_str()),
-                _ => a.executed_at.cmp(&b.executed_at),
+                TransactionSort::ExecutedAt => a.executed_at.cmp(&b.executed_at),
             };
             let ord = if ascending { ord } else { ord.reverse() };
             ord.then_with(|| tiebreaker(a, b))
@@ -160,7 +178,7 @@ impl TransactionService {
         tx_id: i64,
         data: UpdateTransaction,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
-        Self::validate(&data)?;
+        data.check_invariants().map_err(AppError::BadRequest)?;
         let transaction = self.transaction_repo.update(portfolio_id, tx_id, data).await?;
         let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
         Ok((transaction, stocks))
@@ -175,46 +193,4 @@ impl TransactionService {
         }
     }
 
-    fn validate(tx: &NewTransaction) -> Result<(), AppError> {
-        match tx.transaction_type {
-            TransactionType::Buy | TransactionType::Sell => {
-                if tx.stock_id.is_none() {
-                    return Err(AppError::BadRequest(format!("{} requires stock_id", tx.transaction_type.as_str())));
-                }
-                if tx.quantity.is_none() {
-                    return Err(AppError::BadRequest(format!("{} requires quantity", tx.transaction_type.as_str())));
-                }
-                if tx.unit_price.is_none() {
-                    return Err(AppError::BadRequest(format!("{} requires unit_price", tx.transaction_type.as_str())));
-                }
-            }
-            TransactionType::Dividend => {
-                if tx.stock_id.is_none() {
-                    return Err(AppError::BadRequest("dividend requires stock_id".to_owned()));
-                }
-                if tx.amount.is_none() {
-                    return Err(AppError::BadRequest("dividend requires amount".to_owned()));
-                }
-            }
-            TransactionType::Fee => {
-                if tx.amount.is_none() {
-                    return Err(AppError::BadRequest("fee requires amount".to_owned()));
-                }
-            }
-            TransactionType::Split => {
-                if tx.stock_id.is_none() {
-                    return Err(AppError::BadRequest("split requires stock_id".to_owned()));
-                }
-                if tx.split_from.is_none() || tx.split_to.is_none() {
-                    return Err(AppError::BadRequest("split requires split_from and split_to".to_owned()));
-                }
-            }
-            TransactionType::Deposit | TransactionType::Withdrawal => {
-                if tx.amount.is_none() {
-                    return Err(AppError::BadRequest(format!("{} requires amount", tx.transaction_type.as_str())));
-                }
-            }
-        }
-        Ok(())
-    }
 }
