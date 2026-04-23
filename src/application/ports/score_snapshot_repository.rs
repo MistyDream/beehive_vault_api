@@ -2,7 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use crate::application::error::AppError;
-use crate::domain::market::score_snapshot::ScoreSnapshot;
+use crate::domain::scoring::score_snapshot::ScoreSnapshot;
 
 pub trait ScoreSnapshotRepository: Send + Sync {
     fn find_by_id(&self, snapshot_id: i32) -> Pin<Box<dyn Future<Output = Result<ScoreSnapshot, AppError>> + Send + '_>>;

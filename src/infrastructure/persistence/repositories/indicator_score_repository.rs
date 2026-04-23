@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 
 use crate::application::error::AppError;
-use crate::domain::market::indicator_score::IndicatorScore;
+use crate::domain::scoring::indicator_score::IndicatorScore;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::indicator_score::{
     IndicatorScoreRow, NewIndicatorScoreRow,

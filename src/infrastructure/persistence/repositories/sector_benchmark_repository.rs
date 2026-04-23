@@ -9,7 +9,7 @@ use diesel::prelude::*;
 use diesel::upsert::excluded;
 
 use crate::application::error::AppError;
-use crate::domain::market::sector_benchmark::SectorBenchmark;
+use crate::domain::scoring::sector_benchmark::SectorBenchmark;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::sector_benchmark::{
     NewSectorBenchmarkRow, SectorBenchmarkRow,

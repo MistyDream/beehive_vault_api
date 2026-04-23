@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::market::enums::MetricCategory;
+use crate::domain::scoring::enums::MetricCategory;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreDetail {

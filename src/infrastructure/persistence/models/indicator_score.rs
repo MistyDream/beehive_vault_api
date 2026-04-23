@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-use crate::domain::market::indicator_score::IndicatorScore;
+use crate::domain::scoring::indicator_score::IndicatorScore;
 use crate::schema::indicator_scores;
 
 #[derive(Queryable, Selectable)]

@@ -6,7 +6,7 @@
 use diesel::prelude::*;
 
 use crate::application::error::AppError;
-use crate::domain::market::metric_catalog::MetricCatalog;
+use crate::domain::scoring::metric_catalog::MetricCatalog;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::metric_catalog::{
     MetricCatalogRow, NewMetricCatalogRow,
