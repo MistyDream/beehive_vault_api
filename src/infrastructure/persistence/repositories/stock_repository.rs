@@ -32,7 +32,7 @@ impl PgStockRepository {
                     .values(&new)
                     .returning(StockRow::as_returning())
                     .get_result(conn)?;
-                Ok(Stock::from(row))
+                Stock::try_from(row)
             })
             .await
             .map_err(AppError::from)
@@ -51,7 +51,7 @@ impl StockRepository for PgStockRepository {
                         .find(stock_id)
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -72,7 +72,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::id.eq_any(&stock_ids))
                         .select(StockRow::as_select())
                         .load(conn)?;
-                    Ok(rows.into_iter().map(Stock::from).collect())
+                    rows.into_iter().map(Stock::try_from).collect()
                 })
                 .await
                 .map_err(AppError::from)
@@ -90,7 +90,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::symbol.eq(&symbol))
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -108,7 +108,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::isin.eq(&isin))
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -125,7 +125,7 @@ impl StockRepository for PgStockRepository {
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
                         .load(conn)?;
-                    Ok(rows.into_iter().map(Stock::from).collect())
+                    rows.into_iter().map(Stock::try_from).collect()
                 })
                 .await
                 .map_err(AppError::from)

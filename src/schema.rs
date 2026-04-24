@@ -108,12 +108,13 @@ diesel::table! {
         symbol -> Varchar,
         name -> Varchar,
         isin -> Varchar,
-        currency -> Nullable<Varchar>,
+        currency -> Varchar,
         market -> Nullable<Varchar>,
         sector -> Nullable<Varchar>,
         industry -> Nullable<Varchar>,
         country -> Nullable<Varchar>,
         updated_at -> Nullable<Timestamp>,
+        market_region -> Varchar,
     }
 }
 
