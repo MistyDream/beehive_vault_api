@@ -272,6 +272,41 @@ async fn price_history_returns_400_for_inverted_range() {
 }
 
 #[actix_web::test]
+async fn price_history_returns_400_when_from_is_missing() {
+    // Missing `from` must go through the canonical AppError::BadRequest path
+    // so the response is application/problem+json, not a framework-level 400.
+    let stock = test_stock(1, "AAPL", "USD");
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![stock])),
+        Arc::new(InMemoryStockPriceRepo::new()),
+    );
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/prices?to=2026-04-24")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let content_type = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(
+        content_type.starts_with(PROBLEM_JSON),
+        "expected application/problem+json, got {content_type:?}"
+    );
+
+    let body: Value = test::read_body_json(resp).await;
+    assert_eq!(body["status"], 400);
+    assert!(
+        body["detail"].as_str().unwrap_or_default().contains("'from'"),
+        "expected detail to mention the missing 'from' parameter, got {:?}",
+        body["detail"]
+    );
+}
+
+#[actix_web::test]
 async fn price_history_returns_404_for_unknown_stock() {
     let app = make_service!(
         Arc::new(InMemoryStockRepo::default()),

@@ -16,12 +16,20 @@ pub struct Position {
     pub currency: String,
     /// Share of the portfolio's total invested cost, as a fraction in [0.0, 1.0].
     pub weight: f64,
-    /// Latest persisted close price. `None` when no market data is available
-    /// (graceful degradation: the wallet keeps working when prices are missing).
+    /// Latest persisted close price in the stock's native currency. `None`
+    /// when no market data is available (graceful degradation: the wallet
+    /// keeps working when prices are missing).
     pub current_price: Option<f64>,
-    /// `quantity * current_price`. `None` when the price is missing.
+    /// `quantity * current_price`, expressed in the stock's native currency.
+    /// `None` when the price is missing.
     pub current_value: Option<f64>,
     /// `current_value - total_cost`. `None` when the price is missing.
+    ///
+    /// KNOWN LIMITATION: `current_value` is in the stock's currency while
+    /// `total_cost` has already been converted to the portfolio's base
+    /// currency at transaction time. For a multi-currency portfolio these
+    /// are different units and the subtraction is not meaningful. Tracked
+    /// separately on the backend roadmap — valuation currency conversion.
     pub unrealized_pnl: Option<f64>,
 }
 

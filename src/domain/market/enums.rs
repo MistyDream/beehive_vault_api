@@ -21,13 +21,19 @@ impl MarketRegion {
 
     /// Infer the region from a Yahoo-formatted ticker suffix.
     /// No suffix → Americas (NYSE / NASDAQ). Unknown suffix → Other.
+    ///
+    /// Important: `Other` has no cron entry in the price scheduler, so any
+    /// stock that falls through the match below will silently never refresh.
+    /// Prefer extending this match over shipping stocks that land in `Other`.
     pub fn from_symbol(symbol: &str) -> Self {
         match symbol.rsplit_once('.') {
             None => MarketRegion::Americas,
             Some((_, suffix)) => match suffix {
                 "TO" | "V" => MarketRegion::Americas,
                 "PA" | "AS" | "BR" | "DE" | "F" | "L" | "SW" | "MI" => MarketRegion::Europe,
-                "T" | "HK" | "AX" | "SI" => MarketRegion::AsiaPacific,
+                "T" | "HK" | "AX" | "SI" | "NS" | "BO" | "KS" | "KQ" | "SS" | "SZ" | "NZ" => {
+                    MarketRegion::AsiaPacific
+                }
                 _ => MarketRegion::Other,
             },
         }
@@ -78,6 +84,18 @@ mod tests {
         assert_eq!(MarketRegion::from_symbol("7203.T"), MarketRegion::AsiaPacific);
         assert_eq!(MarketRegion::from_symbol("0700.HK"), MarketRegion::AsiaPacific);
         assert_eq!(MarketRegion::from_symbol("BHP.AX"), MarketRegion::AsiaPacific);
+        assert_eq!(MarketRegion::from_symbol("Z74.SI"), MarketRegion::AsiaPacific);
+        // India — NSE + BSE
+        assert_eq!(MarketRegion::from_symbol("RELIANCE.NS"), MarketRegion::AsiaPacific);
+        assert_eq!(MarketRegion::from_symbol("TCS.BO"), MarketRegion::AsiaPacific);
+        // Korea — KRX + KOSDAQ
+        assert_eq!(MarketRegion::from_symbol("005930.KS"), MarketRegion::AsiaPacific);
+        assert_eq!(MarketRegion::from_symbol("091990.KQ"), MarketRegion::AsiaPacific);
+        // Greater China — Shanghai + Shenzhen
+        assert_eq!(MarketRegion::from_symbol("600519.SS"), MarketRegion::AsiaPacific);
+        assert_eq!(MarketRegion::from_symbol("000001.SZ"), MarketRegion::AsiaPacific);
+        // New Zealand
+        assert_eq!(MarketRegion::from_symbol("AIR.NZ"), MarketRegion::AsiaPacific);
     }
 
     #[test]

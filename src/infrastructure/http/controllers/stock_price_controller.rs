@@ -1,6 +1,7 @@
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use garde_actix_web::web::Query;
 
+use crate::application::error::AppError;
 use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 use crate::infrastructure::http::dto::request::stock_price_request::PriceHistoryQuery;
 use crate::infrastructure::http::dto::response::stock_price_response::{
@@ -31,7 +32,13 @@ pub async fn get_stock_price_history(
 ) -> Result<HttpResponse, ApiError> {
     let stock_id = path.into_inner();
     let q = query.into_inner();
-    let (prices, stock) = state.price_service.get_history(stock_id, q.from, q.to).await?;
+    let from = q
+        .from
+        .ok_or_else(|| AppError::BadRequest("query parameter 'from' is required".to_string()))?;
+    let to = q
+        .to
+        .ok_or_else(|| AppError::BadRequest("query parameter 'to' is required".to_string()))?;
+    let (prices, stock) = state.price_service.get_history(stock_id, from, to).await?;
     let response = PriceHistoryResponse::from_prices(prices, stock.currency);
     respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)
 }
