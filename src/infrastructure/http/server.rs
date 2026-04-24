@@ -8,6 +8,7 @@ use garde_actix_web::web::{JsonConfig, QueryConfig};
 use tracing_actix_web::TracingLogger;
 
 use crate::config::settings;
+use crate::infrastructure::http::controllers::health_controller;
 use crate::infrastructure::http::error::garde_error_handler;
 use crate::infrastructure::http::middleware::auth::BearerAuth;
 use crate::infrastructure::http::request_context::REQUEST_PATH;
@@ -64,6 +65,7 @@ pub async fn run(state: AppState) -> Result<()> {
             .wrap(cors)
             .wrap(Governor::new(&governor_conf))
             .wrap(TracingLogger::default())
+            .configure(health_controller::configure)
             .service(
                 web::scope("/v1")
                     .wrap(BearerAuth::new(api_key.clone()))
