@@ -24,10 +24,16 @@ cargo deny check                     # Check licenses, duplicates, advisories (d
 
 DDD layered architecture with strict one-way dependency: `infrastructure` → `application` → `domain`.
 
-- **`domain/`** — Pure business entities and enums. No framework imports (no Diesel, no Actix). Uses only `serde` for serialization.
-- **`application/`** — Cross-cutting concerns. Currently contains `AppError` (the boundary error type).
-- **`infrastructure/http/`** — Actix-web server, routes, controllers, `AppState` (DI container wrapping `Db`), `ApiError` (HTTP error responses).
-- **`infrastructure/persistence/`** — Diesel ORM layer: `Db` struct with async bridge (`spawn_blocking`), connection pool, ORM models, error types.
+- **`domain/`** — Pure business entities, value objects, and enums, organized by subdomain (`market/`, `scoring/`, `wallet/`). No framework imports (no Diesel, no Actix, no tokio). Allowed crates: `serde`, `chrono`, `rust_decimal`.
+- **`application/`** — Use cases and boundary types:
+  - `services/` — orchestration of domain logic (e.g. `PriceService`, `PriceBatchService`, `PositionService`).
+  - `ports/` — trait definitions for outbound dependencies (repositories, external fetchers). Adapters live in `infrastructure/`.
+  - `error.rs` — `AppError`, the boundary error type.
+  - May use `tracing` for observability but must not import framework crates (Diesel, Actix).
+- **`infrastructure/http/`** — Actix-web server, routes, controllers, DTOs, `AppState` (DI container), `ApiError` (HTTP error responses).
+- **`infrastructure/persistence/`** — Diesel ORM layer: `Db` struct with async bridge (`spawn_blocking`), connection pool, ORM models, repository adapters.
+- **`infrastructure/market/`** — Adapters to external market-data providers (currently `YFinancePriceFetcher`). Implements ports from `application/ports/`.
+- **`infrastructure/scheduler/`** — Background cron scheduler (`tokio-cron-scheduler`) that drives periodic use cases (regional price batches).
 
 ## Key Patterns
 
