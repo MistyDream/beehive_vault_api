@@ -9,6 +9,7 @@ use diesel::prelude::*;
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockRepository;
+use crate::domain::market::enums::MarketRegion;
 use crate::domain::market::stock::Stock;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
@@ -122,6 +123,26 @@ impl StockRepository for PgStockRepository {
             self.db
                 .exec(move |conn| {
                     let rows = stocks::table
+                        .select(StockRow::as_select())
+                        .order(stocks::symbol.asc())
+                        .load(conn)?;
+                    rows.into_iter().map(Stock::try_from).collect()
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
+    fn list_by_region(
+        &self,
+        region: MarketRegion,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            let region_str = region.as_str();
+            self.db
+                .exec(move |conn| {
+                    let rows = stocks::table
+                        .filter(stocks::market_region.eq(region_str))
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
                         .load(conn)?;

@@ -59,6 +59,7 @@ impl PriceFetcher for YFinancePriceFetcher {
                 .map(|c| FetchedPrice {
                     price_date: c.ts.date_naive(),
                     close: c.close.amount(),
+                    source: SOURCE.to_string(),
                 })
                 .collect())
         })
