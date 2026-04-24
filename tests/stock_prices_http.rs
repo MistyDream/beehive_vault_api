@@ -7,11 +7,13 @@ mod common;
 
 use std::sync::Arc;
 
-use actix_web::http::header::{CACHE_CONTROL, ETAG, IF_NONE_MATCH};
+use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use actix_web::http::StatusCode;
 use actix_web::{test, web, App};
 use chrono::NaiveDate;
 use serde_json::Value;
+
+const PROBLEM_JSON: &str = "application/problem+json";
 
 use beehive_vault_api::infrastructure::http::routes::configure_routes;
 
@@ -73,6 +75,24 @@ async fn latest_price_returns_404_when_stock_is_unknown() {
     let req = test::TestRequest::get().uri("/v1/stocks/999/price").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    // RFC 9457 Problem Details: error body must be application/problem+json
+    // with the documented shape.
+    let content_type = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(
+        content_type.starts_with(PROBLEM_JSON),
+        "expected application/problem+json, got {content_type:?}"
+    );
+
+    let body: Value = test::read_body_json(resp).await;
+    assert_eq!(body["status"], 404);
+    assert_eq!(body["title"], "Not Found");
+    assert!(body["detail"].is_string());
+    assert!(body["type"].is_string());
 }
 
 #[actix_web::test]
@@ -97,7 +117,7 @@ async fn latest_price_returns_304_when_if_none_match_matches() {
         Arc::new(InMemoryStockPriceRepo::with_prices(vec![price])),
     );
 
-    // First request to capture the ETag.
+    // First request to capture the ETag + Cache-Control.
     let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
     let resp = test::call_service(&app, req).await;
     let etag = resp
@@ -107,14 +127,36 @@ async fn latest_price_returns_304_when_if_none_match_matches() {
         .to_str()
         .unwrap()
         .to_string();
+    let cache_control = resp
+        .headers()
+        .get(CACHE_CONTROL)
+        .expect("Cache-Control on first response")
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Replay with If-None-Match → 304 Not Modified.
     let req = test::TestRequest::get()
         .uri("/v1/stocks/1/price")
-        .insert_header((IF_NONE_MATCH, etag))
+        .insert_header((IF_NONE_MATCH, etag.clone()))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
+
+    // RFC 9110 §15.4.5: 304 MUST preserve ETag + Cache-Control and MUST NOT
+    // carry a body.
+    assert_eq!(
+        resp.headers().get(ETAG).and_then(|v| v.to_str().ok()),
+        Some(etag.as_str()),
+        "304 must echo back the same ETag"
+    );
+    assert_eq!(
+        resp.headers().get(CACHE_CONTROL).and_then(|v| v.to_str().ok()),
+        Some(cache_control.as_str()),
+        "304 must preserve Cache-Control"
+    );
+    let body = test::read_body(resp).await;
+    assert!(body.is_empty(), "304 must not carry a body");
 }
 
 #[actix_web::test]
@@ -133,6 +175,15 @@ async fn latest_price_returns_304_when_if_none_match_is_wildcard() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
+
+    // Same 304 invariants as the matching-ETag case.
+    assert!(resp.headers().contains_key(ETAG), "304 must carry an ETag header");
+    assert!(
+        resp.headers().contains_key(CACHE_CONTROL),
+        "304 must preserve Cache-Control"
+    );
+    let body = test::read_body(resp).await;
+    assert!(body.is_empty(), "304 must not carry a body");
 }
 
 // ======================== GET /v1/stocks/{id}/prices =========================
@@ -198,6 +249,26 @@ async fn price_history_returns_400_for_inverted_range() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    let content_type = resp
+        .headers()
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(
+        content_type.starts_with(PROBLEM_JSON),
+        "expected application/problem+json, got {content_type:?}"
+    );
+
+    let body: Value = test::read_body_json(resp).await;
+    assert_eq!(body["status"], 400);
+    assert_eq!(body["title"], "Bad Request");
+    // `detail` must surface the human-readable reason produced by the service.
+    assert!(
+        body["detail"].as_str().unwrap_or_default().contains("on or before"),
+        "expected detail to mention the range constraint, got {:?}",
+        body["detail"]
+    );
 }
 
 #[actix_web::test]

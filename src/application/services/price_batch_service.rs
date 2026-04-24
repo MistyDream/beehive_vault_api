@@ -379,6 +379,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fetch_region_counts_all_failures_when_every_fetch_errors() {
+        // Full-region outage (Yahoo down, auth expired, ...): every fetch fails.
+        // The batch must still return Ok with stocks_failed == stocks_total and
+        // must NOT call upsert_many since there is nothing to persist.
+        let stocks = vec![stock(1, "KO1.PA"), stock(2, "KO2.PA")];
+        let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, stocks));
+
+        let mut by_symbol = HashMap::new();
+        by_symbol.insert("KO1.PA".to_string(), Err("rate limited".to_string()));
+        by_symbol.insert("KO2.PA".to_string(), Err("upstream 500".to_string()));
+        let fetcher = Arc::new(ProgrammableFetcher { by_symbol });
+
+        let price_repo = Arc::new(SpyingPriceRepo::default());
+        let service = PriceBatchService::new(stock_repo, price_repo.clone(), fetcher);
+
+        let report = service.fetch_region(MarketRegion::Europe).await.unwrap();
+
+        assert_eq!(report.stocks_total, 2);
+        assert_eq!(report.stocks_ok, 0);
+        assert_eq!(report.stocks_failed, 2);
+        assert_eq!(report.prices_persisted, 0);
+        assert!(
+            price_repo.upserts.lock().unwrap().is_empty(),
+            "upsert_many must not be called when nothing was fetched"
+        );
+    }
+
+    #[tokio::test]
     async fn fetch_region_skips_upsert_call_when_nothing_to_persist() {
         let stocks = vec![stock(1, "EMPTY.PA")];
         let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, stocks));
