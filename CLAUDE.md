@@ -12,9 +12,13 @@ diesel migration run                 # Apply pending migrations
 diesel migration revert              # Rollback last migration
 diesel migration redo                # Revert + reapply last migration
 diesel print-schema > src/schema.rs  # Regenerate schema after migration changes
+cargo audit                          # Check Cargo.lock against RustSec advisories
+cargo deny check                     # Check licenses, duplicates, advisories (deny.toml)
 ```
 
 **Environment variables** (via `.env`): `API_ADDR`, `API_PORT`, `DATABASE_URL`
+
+**System build dependencies**: `protoc` (e.g. `apt install protobuf-compiler`) — required by `yfinance-rs` at build time.
 
 ## Architecture
 
@@ -43,6 +47,13 @@ DDD layered architecture with strict one-way dependency: `infrastructure` → `a
 PostgreSQL, shared with a legacy PHP app. **`diesel.toml`** uses `filter.only_tables` to scope `print-schema` to only this project's tables. Always maintain this filter when adding new tables.
 
 After any migration change: `diesel migration run && diesel print-schema > src/schema.rs`
+
+## External Data Providers
+
+Market data is fetched through the `PriceFetcher` port (`application/ports/price_fetcher.rs`). The only adapter today is `YFinancePriceFetcher` (`infrastructure/market/`), backed by `yfinance-rs`.
+
+- **`yfinance-rs` is a young single-author crate** (first release 2025-08) that pulls the entire `paft` ecosystem (7 transitive crates) and requires `protoc` at build time. The `PriceFetcher` port exists specifically to contain this risk — application code must never import `yfinance_rs::*` directly, so swapping to another provider (EODHD, Alpha Vantage, ...) stays a one-file change.
+- Any new market-data source must be introduced as a new adapter behind the same port.
 
 ## Code Conventions
 
