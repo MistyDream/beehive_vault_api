@@ -5,6 +5,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
 use crate::application::error::AppError;
+use crate::domain::market::price::NewPrice;
 
 /// A closing price as returned by an external market-data provider,
 /// before any mapping to an internal `stock_id`. `source` identifies the
@@ -15,6 +16,17 @@ pub struct FetchedPrice {
     pub price_date: NaiveDate,
     pub close: Decimal,
     pub source: String,
+}
+
+impl FetchedPrice {
+    pub fn into_new_price(self, stock_id: i32) -> NewPrice {
+        NewPrice {
+            stock_id,
+            price_date: self.price_date,
+            close: self.close,
+            source: self.source,
+        }
+    }
 }
 
 pub trait PriceFetcher: Send + Sync {

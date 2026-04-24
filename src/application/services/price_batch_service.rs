@@ -76,12 +76,7 @@ impl PriceBatchService {
             {
                 Ok(fetched) => {
                     report.stocks_ok += 1;
-                    to_persist.extend(fetched.into_iter().map(|fp| NewPrice {
-                        stock_id: stock.id,
-                        price_date: fp.price_date,
-                        close: fp.close,
-                        source: fp.source,
-                    }));
+                    to_persist.extend(fetched.into_iter().map(|fp| fp.into_new_price(stock.id)));
                 }
                 Err(err) => {
                     report.stocks_failed += 1;
@@ -95,9 +90,8 @@ impl PriceBatchService {
             }
         }
 
-        if !to_persist.is_empty() {
-            report.prices_persisted = self.price_repo.upsert_many(to_persist).await?;
-        }
+        // `upsert_many` short-circuits on empty input, so no caller-side guard needed.
+        report.prices_persisted = self.price_repo.upsert_many(to_persist).await?;
 
         info!(
             stocks_total = report.stocks_total,
@@ -129,12 +123,7 @@ impl PriceBatchService {
 
         let rows: Vec<NewPrice> = fetched
             .into_iter()
-            .map(|fp| NewPrice {
-                stock_id: stock.id,
-                price_date: fp.price_date,
-                close: fp.close,
-                source: fp.source,
-            })
+            .map(|fp| fp.into_new_price(stock.id))
             .collect();
         self.price_repo.upsert_many(rows).await
     }
@@ -401,13 +390,13 @@ mod tests {
         assert_eq!(report.stocks_failed, 2);
         assert_eq!(report.prices_persisted, 0);
         assert!(
-            price_repo.upserts.lock().unwrap().is_empty(),
-            "upsert_many must not be called when nothing was fetched"
+            price_repo.upserted_rows().is_empty(),
+            "no rows must be upserted when every fetch fails"
         );
     }
 
     #[tokio::test]
-    async fn fetch_region_skips_upsert_call_when_nothing_to_persist() {
+    async fn fetch_region_persists_nothing_when_every_fetch_is_empty() {
         let stocks = vec![stock(1, "EMPTY.PA")];
         let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, stocks));
         // Fetcher returns an empty Vec (e.g. market closed / no trades in window).
@@ -422,7 +411,6 @@ mod tests {
 
         assert_eq!(report.stocks_ok, 1);
         assert_eq!(report.prices_persisted, 0);
-        // upsert_many must not have been called at all (optimisation guard).
-        assert!(price_repo.upserts.lock().unwrap().is_empty());
+        assert!(price_repo.upserted_rows().is_empty());
     }
 }
