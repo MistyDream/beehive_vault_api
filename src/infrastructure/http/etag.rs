@@ -20,11 +20,19 @@ pub fn respond_with_etag<T: Serialize>(
     hasher.write(&body);
     let etag = format!("\"{:016x}\"", hasher.finish());
 
+    // RFC 9110 §13.1.2: `If-None-Match: *` matches any current representation,
+    // so when we are about to return a representation (the 200 path below), any
+    // `*` in the list must short-circuit to 304.
     let matches = request
         .headers()
         .get(IF_NONE_MATCH)
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.split(',').any(|tag| tag.trim() == etag))
+        .map(|v| {
+            v.split(',').any(|tag| {
+                let trimmed = tag.trim();
+                trimmed == "*" || trimmed == etag
+            })
+        })
         .unwrap_or(false);
 
     if matches {

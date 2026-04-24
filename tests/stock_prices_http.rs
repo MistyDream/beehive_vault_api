@@ -117,6 +117,24 @@ async fn latest_price_returns_304_when_if_none_match_matches() {
     assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
 }
 
+#[actix_web::test]
+async fn latest_price_returns_304_when_if_none_match_is_wildcard() {
+    // RFC 9110 §13.1.2: `If-None-Match: *` must match any current representation.
+    let stock = test_stock(1, "AAPL", "USD");
+    let price = test_price(1, date(2026, 4, 24), "170.25");
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![stock])),
+        Arc::new(InMemoryStockPriceRepo::with_prices(vec![price])),
+    );
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header((IF_NONE_MATCH, "*"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
+}
+
 // ======================== GET /v1/stocks/{id}/prices =========================
 
 #[actix_web::test]
