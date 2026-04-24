@@ -103,6 +103,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    stock_prices (id) {
+        id -> Int8,
+        stock_id -> Int4,
+        price_date -> Date,
+        close -> Numeric,
+        source -> Varchar,
+        fetched_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     stocks (id) {
         id -> Int4,
         symbol -> Varchar,
@@ -145,6 +156,7 @@ diesel::joinable!(indicator_sub_scores -> indicator_scores (indicator_score_id))
 diesel::joinable!(metric_values -> stocks (stock_id));
 diesel::joinable!(score_details -> score_snapshots (snapshot_id));
 diesel::joinable!(score_snapshots -> stocks (stock_id));
+diesel::joinable!(stock_prices -> stocks (stock_id));
 diesel::joinable!(transactions -> portfolios (portfolio_id));
 diesel::joinable!(transactions -> stocks (stock_id));
 
@@ -157,6 +169,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     score_details,
     score_snapshots,
     sector_benchmarks,
+    stock_prices,
     stocks,
     transactions,
 );
