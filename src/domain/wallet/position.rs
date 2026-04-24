@@ -1,6 +1,8 @@
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::domain::market::price::Price;
 use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
@@ -14,6 +16,21 @@ pub struct Position {
     pub currency: String,
     /// Share of the portfolio's total invested cost, as a fraction in [0.0, 1.0].
     pub weight: f64,
+    /// Latest persisted close price in the stock's native currency. `None`
+    /// when no market data is available (graceful degradation: the wallet
+    /// keeps working when prices are missing).
+    pub current_price: Option<f64>,
+    /// `quantity * current_price`, expressed in the stock's native currency.
+    /// `None` when the price is missing.
+    pub current_value: Option<f64>,
+    /// `current_value - total_cost`. `None` when the price is missing.
+    ///
+    /// KNOWN LIMITATION: `current_value` is in the stock's currency while
+    /// `total_cost` has already been converted to the portfolio's base
+    /// currency at transaction time. For a multi-currency portfolio these
+    /// are different units and the subtraction is not meaningful. Tracked
+    /// separately on the backend roadmap — valuation currency conversion.
+    pub unrealized_pnl: Option<f64>,
 }
 
 /// Compute open positions from a chronologically ordered list of transactions.
@@ -96,10 +113,142 @@ pub fn compute_positions(
                 total_cost,
                 currency,
                 weight,
+                current_price: None,
+                current_value: None,
+                unrealized_pnl: None,
             }
         })
         .collect();
 
     positions.sort_by(|a, b| a.stock.id.cmp(&b.stock.id));
     positions
+}
+
+/// Enrich positions in place with the latest close price per stock.
+/// Positions whose stock is missing from `prices_by_stock_id` keep their
+/// `current_price` / `current_value` / `unrealized_pnl` at `None`.
+pub fn valorize_positions(positions: &mut [Position], prices_by_stock_id: &HashMap<i32, Price>) {
+    for position in positions.iter_mut() {
+        let Some(price) = prices_by_stock_id.get(&position.stock.id) else {
+            continue;
+        };
+        // `to_f64` only returns `None` for Decimal values outside f64 range,
+        // which no realistic stock close can reach. The position stays unvalued
+        // in that paranoid branch and `PortfolioSummary.positions_without_price`
+        // will still surface it to the caller.
+        let Some(close) = price.close.to_f64() else {
+            continue;
+        };
+        let value = position.quantity * close;
+        position.current_price = Some(close);
+        position.current_value = Some(value);
+        position.unrealized_pnl = Some(value - position.total_cost);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::market::enums::MarketRegion;
+    use chrono::NaiveDate;
+    use rust_decimal::Decimal;
+    use std::str::FromStr;
+
+    fn stock(id: i32, symbol: &str) -> Stock {
+        Stock {
+            id,
+            symbol: symbol.to_string(),
+            name: format!("Stock {id}"),
+            isin: format!("ISIN{id:04}"),
+            currency: "EUR".to_string(),
+            market_region: MarketRegion::Europe,
+            market: None,
+            sector: None,
+            industry: None,
+            country: None,
+        }
+    }
+
+    fn position(stock: Stock, quantity: f64, total_cost: f64) -> Position {
+        Position {
+            stock,
+            quantity,
+            average_cost: if quantity > 0.0 { total_cost / quantity } else { 0.0 },
+            total_cost,
+            currency: "EUR".to_string(),
+            weight: 1.0,
+            current_price: None,
+            current_value: None,
+            unrealized_pnl: None,
+        }
+    }
+
+    fn price(stock_id: i32, close: &str) -> Price {
+        Price {
+            id: stock_id as i64,
+            stock_id,
+            price_date: NaiveDate::from_ymd_opt(2026, 4, 24).unwrap(),
+            close: Decimal::from_str(close).unwrap(),
+            source: "yahoo".to_string(),
+            fetched_at: NaiveDate::from_ymd_opt(2026, 4, 24)
+                .unwrap()
+                .and_hms_opt(12, 0, 0)
+                .unwrap(),
+        }
+    }
+
+    #[test]
+    fn valorizes_all_positions_when_every_price_is_present() {
+        // 10 shares @ cost 100 EUR (1000 cost basis), latest close 130 → value 1300, pnl +300.
+        let mut positions = vec![position(stock(1, "AAA"), 10.0, 1000.0)];
+        let mut prices = HashMap::new();
+        prices.insert(1, price(1, "130.00"));
+
+        valorize_positions(&mut positions, &prices);
+
+        let p = &positions[0];
+        assert_eq!(p.current_price, Some(130.0));
+        assert_eq!(p.current_value, Some(1300.0));
+        assert_eq!(p.unrealized_pnl, Some(300.0));
+    }
+
+    #[test]
+    fn leaves_unpriced_positions_untouched() {
+        // Two positions, only one has a price — graceful degradation.
+        let mut positions = vec![
+            position(stock(1, "AAA"), 10.0, 1000.0),
+            position(stock(2, "BBB"), 5.0, 500.0),
+        ];
+        let mut prices = HashMap::new();
+        prices.insert(1, price(1, "110.00"));
+
+        valorize_positions(&mut positions, &prices);
+
+        assert_eq!(positions[0].current_value, Some(1100.0));
+        assert_eq!(positions[1].current_value, None);
+        assert_eq!(positions[1].current_price, None);
+        assert_eq!(positions[1].unrealized_pnl, None);
+    }
+
+    #[test]
+    fn empty_price_map_leaves_all_fields_at_none() {
+        let mut positions = vec![position(stock(1, "AAA"), 10.0, 1000.0)];
+        valorize_positions(&mut positions, &HashMap::new());
+        assert!(positions[0].current_price.is_none());
+        assert!(positions[0].current_value.is_none());
+        assert!(positions[0].unrealized_pnl.is_none());
+    }
+
+    #[test]
+    fn computes_negative_pnl_when_close_is_below_cost() {
+        // 4 shares @ 50 cost (total 200), close 40 → value 160, pnl -40.
+        let mut positions = vec![position(stock(1, "AAA"), 4.0, 200.0)];
+        let mut prices = HashMap::new();
+        prices.insert(1, price(1, "40.00"));
+
+        valorize_positions(&mut positions, &prices);
+
+        assert_eq!(positions[0].current_value, Some(160.0));
+        assert_eq!(positions[0].unrealized_pnl, Some(-40.0));
+    }
 }

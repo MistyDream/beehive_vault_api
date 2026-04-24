@@ -8,3 +8,4 @@ pub mod score_detail;
 pub mod score_snapshot;
 pub mod sector_benchmark;
 pub mod stock;
+pub mod stock_price;

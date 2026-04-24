@@ -11,7 +11,7 @@ use diesel::prelude::*;
 
 use crate::application::error::AppError;
 use crate::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
-use crate::domain::market::score_snapshot::ScoreSnapshot;
+use crate::domain::scoring::score_snapshot::ScoreSnapshot;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::score_snapshot::{
     NewScoreSnapshotRow, ScoreSnapshotRow,

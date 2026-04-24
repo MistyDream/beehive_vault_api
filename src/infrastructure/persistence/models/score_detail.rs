@@ -1,8 +1,8 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-use crate::domain::market::enums::MetricCategory;
-use crate::domain::market::score_detail::ScoreDetail;
+use crate::domain::scoring::enums::MetricCategory;
+use crate::domain::scoring::score_detail::ScoreDetail;
 use crate::infrastructure::persistence::error::DbError;
 use crate::schema::score_details;
 

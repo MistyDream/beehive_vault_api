@@ -6,6 +6,9 @@ use crate::infrastructure::http::controllers::portfolio_controller::{
 };
 use crate::infrastructure::http::controllers::performance_controller::get_performance;
 use crate::infrastructure::http::controllers::scoring_controller::get_portfolio_scoring;
+use crate::infrastructure::http::controllers::stock_price_controller::{
+    get_stock_latest_price, get_stock_price_history,
+};
 use crate::infrastructure::http::controllers::position_controller::{
     get_cash_balance, get_portfolio_summary, get_positions,
 };
@@ -32,4 +35,6 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(get_portfolio_summary);
     cfg.service(get_performance);
     cfg.service(get_portfolio_scoring);
+    cfg.service(get_stock_latest_price);
+    cfg.service(get_stock_price_history);
 }

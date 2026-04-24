@@ -12,18 +12,31 @@ diesel migration run                 # Apply pending migrations
 diesel migration revert              # Rollback last migration
 diesel migration redo                # Revert + reapply last migration
 diesel print-schema > src/schema.rs  # Regenerate schema after migration changes
+cargo audit                          # Check Cargo.lock against RustSec advisories
+cargo deny check                     # Check licenses, duplicates, advisories (deny.toml)
 ```
 
-**Environment variables** (via `.env`): `API_ADDR`, `API_PORT`, `DATABASE_URL`
+**Environment variables** (via `.env`):
+- `API_ADDR`, `API_PORT`, `DATABASE_URL` — required
+- `CORS_ALLOWED_ORIGINS` — comma-separated; production must override to `https://...` origins
+- `PRICE_SCHEDULER_ENABLED` — `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`; defaults to enabled. Set to `false` in dev/CI so the price-batch cron doesn't hit Yahoo on every process launch.
+
+**System build dependencies**: `protoc` (e.g. `apt install protobuf-compiler`) — required by `yfinance-rs` at build time.
 
 ## Architecture
 
 DDD layered architecture with strict one-way dependency: `infrastructure` → `application` → `domain`.
 
-- **`domain/`** — Pure business entities and enums. No framework imports (no Diesel, no Actix). Uses only `serde` for serialization.
-- **`application/`** — Cross-cutting concerns. Currently contains `AppError` (the boundary error type).
-- **`infrastructure/http/`** — Actix-web server, routes, controllers, `AppState` (DI container wrapping `Db`), `ApiError` (HTTP error responses).
-- **`infrastructure/persistence/`** — Diesel ORM layer: `Db` struct with async bridge (`spawn_blocking`), connection pool, ORM models, error types.
+- **`domain/`** — Pure business entities, value objects, and enums, organized by subdomain (`market/`, `scoring/`, `wallet/`). No framework imports (no Diesel, no Actix, no tokio). Allowed crates: `serde`, `chrono`, `rust_decimal`.
+- **`application/`** — Use cases and boundary types:
+  - `services/` — orchestration of domain logic (e.g. `PriceService`, `PriceBatchService`, `PositionService`).
+  - `ports/` — trait definitions for outbound dependencies (repositories, external fetchers). Adapters live in `infrastructure/`.
+  - `error.rs` — `AppError`, the boundary error type.
+  - May use `tracing` for observability but must not import framework crates (Diesel, Actix).
+- **`infrastructure/http/`** — Actix-web server, routes, controllers, DTOs, `AppState` (DI container), `ApiError` (HTTP error responses).
+- **`infrastructure/persistence/`** — Diesel ORM layer: `Db` struct with async bridge (`spawn_blocking`), connection pool, ORM models, repository adapters.
+- **`infrastructure/market/`** — Adapters to external market-data providers (currently `YFinancePriceFetcher`). Implements ports from `application/ports/`.
+- **`infrastructure/scheduler/`** — Background cron scheduler (`tokio-cron-scheduler`) that drives periodic use cases (regional price batches).
 
 ## Key Patterns
 
@@ -43,6 +56,13 @@ DDD layered architecture with strict one-way dependency: `infrastructure` → `a
 PostgreSQL, shared with a legacy PHP app. **`diesel.toml`** uses `filter.only_tables` to scope `print-schema` to only this project's tables. Always maintain this filter when adding new tables.
 
 After any migration change: `diesel migration run && diesel print-schema > src/schema.rs`
+
+## External Data Providers
+
+Market data is fetched through the `PriceFetcher` port (`application/ports/price_fetcher.rs`). The only adapter today is `YFinancePriceFetcher` (`infrastructure/market/`), backed by `yfinance-rs`.
+
+- **`yfinance-rs` is a young single-author crate** (first release 2025-08) that pulls the entire `paft` ecosystem (7 transitive crates) and requires `protoc` at build time. The `PriceFetcher` port exists specifically to contain this risk — application code must never import `yfinance_rs::*` directly, so swapping to another provider (EODHD, Alpha Vantage, ...) stays a one-file change.
+- Any new market-data source must be introduced as a new adapter behind the same port.
 
 ## Code Conventions
 

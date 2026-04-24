@@ -7,7 +7,7 @@
 use diesel::prelude::*;
 
 use crate::application::error::AppError;
-use crate::domain::market::score_detail::ScoreDetail;
+use crate::domain::scoring::score_detail::ScoreDetail;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::score_detail::{
     NewScoreDetailRow, ScoreDetailRow,

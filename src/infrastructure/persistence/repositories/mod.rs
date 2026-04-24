@@ -7,4 +7,5 @@ pub mod metric_value_repository;
 pub mod score_detail_repository;
 pub mod score_snapshot_repository;
 pub mod sector_benchmark_repository;
+pub mod stock_price_repository;
 pub mod stock_repository;

@@ -9,6 +9,7 @@ use diesel::prelude::*;
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockRepository;
+use crate::domain::market::enums::MarketRegion;
 use crate::domain::market::stock::Stock;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
@@ -32,7 +33,7 @@ impl PgStockRepository {
                     .values(&new)
                     .returning(StockRow::as_returning())
                     .get_result(conn)?;
-                Ok(Stock::from(row))
+                Stock::try_from(row)
             })
             .await
             .map_err(AppError::from)
@@ -51,7 +52,7 @@ impl StockRepository for PgStockRepository {
                         .find(stock_id)
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -72,7 +73,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::id.eq_any(&stock_ids))
                         .select(StockRow::as_select())
                         .load(conn)?;
-                    Ok(rows.into_iter().map(Stock::from).collect())
+                    rows.into_iter().map(Stock::try_from).collect()
                 })
                 .await
                 .map_err(AppError::from)
@@ -90,7 +91,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::symbol.eq(&symbol))
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -108,7 +109,7 @@ impl StockRepository for PgStockRepository {
                         .filter(stocks::isin.eq(&isin))
                         .select(StockRow::as_select())
                         .first(conn)?;
-                    Ok(Stock::from(row))
+                    Stock::try_from(row)
                 })
                 .await
                 .map_err(AppError::from)
@@ -125,7 +126,27 @@ impl StockRepository for PgStockRepository {
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
                         .load(conn)?;
-                    Ok(rows.into_iter().map(Stock::from).collect())
+                    rows.into_iter().map(Stock::try_from).collect()
+                })
+                .await
+                .map_err(AppError::from)
+        })
+    }
+
+    fn list_by_region(
+        &self,
+        region: MarketRegion,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            let region_str = region.as_str();
+            self.db
+                .exec(move |conn| {
+                    let rows = stocks::table
+                        .filter(stocks::market_region.eq(region_str))
+                        .select(StockRow::as_select())
+                        .order(stocks::symbol.asc())
+                        .load(conn)?;
+                    rows.into_iter().map(Stock::try_from).collect()
                 })
                 .await
                 .map_err(AppError::from)

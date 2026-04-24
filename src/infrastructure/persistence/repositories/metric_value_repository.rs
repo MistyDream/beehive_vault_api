@@ -10,7 +10,7 @@ use diesel::prelude::*;
 use diesel::upsert::excluded;
 
 use crate::application::error::AppError;
-use crate::domain::market::metric_value::MetricValue;
+use crate::domain::scoring::metric_value::MetricValue;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::metric_value::{
     MetricValueRow, NewMetricValueRow,

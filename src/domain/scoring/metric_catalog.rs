@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use crate::domain::market::enums::{MetricCategory, MetricDataType};
+use crate::domain::scoring::enums::{MetricCategory, MetricDataType};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricCatalog {
