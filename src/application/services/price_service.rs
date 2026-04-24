@@ -68,3 +68,249 @@ impl PriceService {
         Ok((prices, stock))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Mutex;
+
+    use crate::domain::market::enums::MarketRegion;
+
+    // ---------- minimal fakes for the two ports the service depends on ----------
+
+    #[derive(Default)]
+    struct FakeStockRepo {
+        by_id: Mutex<HashMap<i32, Stock>>,
+    }
+
+    impl FakeStockRepo {
+        fn with_stock(id: i32) -> Self {
+            let mut map = HashMap::new();
+            map.insert(
+                id,
+                Stock {
+                    id,
+                    symbol: format!("S{id}"),
+                    name: format!("Stock {id}"),
+                    isin: format!("ISIN{id:04}"),
+                    currency: "EUR".to_string(),
+                    market_region: MarketRegion::Europe,
+                    market: None,
+                    sector: None,
+                    industry: None,
+                    country: None,
+                },
+            );
+            Self { by_id: Mutex::new(map) }
+        }
+    }
+
+    impl crate::application::ports::stock_repository::StockRepository for FakeStockRepo {
+        fn find_by_id(
+            &self,
+            stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move {
+                self.by_id
+                    .lock()
+                    .unwrap()
+                    .get(&stock_id)
+                    .cloned()
+                    .ok_or(AppError::NotFound)
+            })
+        }
+
+        fn find_by_ids(
+            &self,
+            _stock_ids: Vec<i32>,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn find_by_symbol(
+            &self,
+            _symbol: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn find_by_isin(
+            &self,
+            _isin: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn list_all(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_by_region(
+            &self,
+            _region: MarketRegion,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn delete(
+            &self,
+            _stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(false) })
+        }
+    }
+
+    #[derive(Default)]
+    struct FakePriceRepo {
+        latest: Mutex<HashMap<i32, Price>>,
+    }
+
+    impl FakePriceRepo {
+        fn empty() -> Self {
+            Self::default()
+        }
+
+        fn with_latest(stock_id: i32, price: Price) -> Self {
+            let mut map = HashMap::new();
+            map.insert(stock_id, price);
+            Self { latest: Mutex::new(map) }
+        }
+    }
+
+    impl crate::application::ports::stock_price_repository::StockPriceRepository for FakePriceRepo {
+        fn upsert_many(
+            &self,
+            _prices: Vec<crate::domain::market::price::NewPrice>,
+        ) -> Pin<Box<dyn Future<Output = Result<usize, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(0) })
+        }
+
+        fn find_latest(
+            &self,
+            stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<Price>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(self.latest.lock().unwrap().get(&stock_id).cloned()) })
+        }
+
+        fn find_latest_batch(
+            &self,
+            _stock_ids: Vec<i32>,
+        ) -> Pin<Box<dyn Future<Output = Result<HashMap<i32, Price>, AppError>> + Send + '_>>
+        {
+            Box::pin(async move { Ok(HashMap::new()) })
+        }
+
+        fn find_history(
+            &self,
+            _stock_id: i32,
+            _from: NaiveDate,
+            _to: NaiveDate,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Price>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+    }
+
+    // ---------- helpers ----------
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    fn make_service(stock_repo: FakeStockRepo, price_repo: FakePriceRepo) -> PriceService {
+        PriceService::new(Arc::new(stock_repo), Arc::new(price_repo))
+    }
+
+    // ---------- tests ----------
+
+    #[tokio::test]
+    async fn get_latest_returns_not_found_when_stock_is_unknown() {
+        let service = make_service(FakeStockRepo::default(), FakePriceRepo::empty());
+        let err = service.get_latest(42).await.unwrap_err();
+        assert!(matches!(err, AppError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn get_latest_returns_not_found_when_stock_has_no_price_yet() {
+        let service = make_service(FakeStockRepo::with_stock(1), FakePriceRepo::empty());
+        let err = service.get_latest(1).await.unwrap_err();
+        assert!(matches!(err, AppError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn get_history_rejects_inverted_range() {
+        let service = make_service(FakeStockRepo::with_stock(1), FakePriceRepo::empty());
+        let err = service
+            .get_history(1, date(2026, 4, 24), date(2026, 4, 23))
+            .await
+            .unwrap_err();
+        match err {
+            AppError::BadRequest(msg) => assert!(msg.contains("on or before")),
+            other => panic!("expected BadRequest, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_history_rejects_windows_longer_than_the_cap() {
+        // 10 years + 1 day exceeds MAX_HISTORY_WINDOW_DAYS.
+        let service = make_service(FakeStockRepo::with_stock(1), FakePriceRepo::empty());
+        let from = date(2016, 1, 1);
+        let to = from
+            .checked_add_days(chrono::Days::new(MAX_HISTORY_WINDOW_DAYS + 1))
+            .unwrap();
+        let err = service.get_history(1, from, to).await.unwrap_err();
+        match err {
+            AppError::BadRequest(msg) => assert!(msg.contains("must not exceed")),
+            other => panic!("expected BadRequest, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_history_returns_not_found_when_stock_is_unknown() {
+        let service = make_service(FakeStockRepo::default(), FakePriceRepo::empty());
+        let err = service
+            .get_history(999, date(2026, 4, 1), date(2026, 4, 24))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn get_history_returns_empty_when_stock_exists_but_has_no_prices() {
+        // Existing stock, no prices → empty Vec, not NotFound (Q: "404 ou empty si aucun prix").
+        let service = make_service(FakeStockRepo::with_stock(1), FakePriceRepo::empty());
+        let (prices, stock) = service
+            .get_history(1, date(2026, 4, 1), date(2026, 4, 24))
+            .await
+            .expect("valid range on existing stock should not error");
+        assert!(prices.is_empty());
+        assert_eq!(stock.id, 1);
+    }
+
+    #[tokio::test]
+    async fn get_latest_returns_the_price_and_stock_together() {
+        use rust_decimal::Decimal;
+        use std::str::FromStr;
+
+        let price = Price {
+            id: 1,
+            stock_id: 1,
+            price_date: date(2026, 4, 24),
+            close: Decimal::from_str("130.00").unwrap(),
+            source: "yahoo".to_string(),
+            fetched_at: date(2026, 4, 24).and_hms_opt(12, 0, 0).unwrap(),
+        };
+        let service = make_service(
+            FakeStockRepo::with_stock(1),
+            FakePriceRepo::with_latest(1, price),
+        );
+        let (returned_price, returned_stock) = service.get_latest(1).await.unwrap();
+        assert_eq!(returned_stock.id, 1);
+        assert_eq!(returned_stock.currency, "EUR");
+        assert_eq!(returned_price.close, Decimal::from_str("130.00").unwrap());
+    }
+}

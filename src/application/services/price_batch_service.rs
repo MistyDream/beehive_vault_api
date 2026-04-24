@@ -1,7 +1,8 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::{Days, Utc};
-use tracing::{info, warn};
+use tracing::{info, warn, Instrument};
 
 use crate::application::error::AppError;
 use crate::application::ports::price_fetcher::PriceFetcher;
@@ -48,6 +49,12 @@ impl PriceBatchService {
     /// region and upsert them. Individual stock failures are logged and counted
     /// in the report but never abort the batch.
     pub async fn fetch_region(&self, region: MarketRegion) -> Result<FetchReport, AppError> {
+        let span = tracing::info_span!("price_batch.fetch_region", region = region.as_str());
+        self.fetch_region_inner(region).instrument(span).await
+    }
+
+    async fn fetch_region_inner(&self, region: MarketRegion) -> Result<FetchReport, AppError> {
+        let started_at = Instant::now();
         let today = Utc::now().date_naive();
         let from = today
             .checked_sub_days(Days::new(DAILY_LOOKBACK_DAYS))
@@ -93,11 +100,11 @@ impl PriceBatchService {
         }
 
         info!(
-            region = region.as_str(),
             stocks_total = report.stocks_total,
             stocks_ok = report.stocks_ok,
             stocks_failed = report.stocks_failed,
             prices_persisted = report.prices_persisted,
+            duration_ms = started_at.elapsed().as_millis() as u64,
             "price batch completed"
         );
         Ok(report)
@@ -107,6 +114,7 @@ impl PriceBatchService {
     /// called right after a stock is created so the wallet can value it
     /// immediately. Failures propagate to the caller (creation path decides
     /// whether to treat it as fatal or best-effort).
+    #[tracing::instrument(skip(self), fields(stock_id = %stock_id))]
     pub async fn backfill_stock(&self, stock_id: i32) -> Result<usize, AppError> {
         let stock = self.stock_repo.find_by_id(stock_id).await?;
         let today = Utc::now().date_naive();
@@ -129,5 +137,264 @@ impl PriceBatchService {
             })
             .collect();
         self.price_repo.upsert_many(rows).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::str::FromStr;
+    use std::sync::Mutex;
+
+    use chrono::NaiveDate;
+    use rust_decimal::Decimal;
+
+    use crate::application::ports::price_fetcher::{FetchedPrice, PriceFetcher};
+    use crate::application::ports::stock_price_repository::StockPriceRepository;
+    use crate::application::ports::stock_repository::StockRepository;
+    use crate::domain::market::price::Price;
+    use crate::domain::market::stock::Stock;
+
+    // ---------- fakes ----------
+
+    struct FakeStockRepo {
+        by_region: HashMap<MarketRegion, Vec<Stock>>,
+    }
+
+    impl FakeStockRepo {
+        fn with_region(region: MarketRegion, stocks: Vec<Stock>) -> Self {
+            let mut by_region = HashMap::new();
+            by_region.insert(region, stocks);
+            Self { by_region }
+        }
+    }
+
+    impl StockRepository for FakeStockRepo {
+        fn find_by_id(
+            &self,
+            _stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn find_by_ids(
+            &self,
+            _stock_ids: Vec<i32>,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn find_by_symbol(
+            &self,
+            _symbol: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn find_by_isin(
+            &self,
+            _isin: String,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn list_all(
+            &self,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn list_by_region(
+            &self,
+            region: MarketRegion,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+            let stocks = self
+                .by_region
+                .get(&region)
+                .cloned()
+                .unwrap_or_default();
+            Box::pin(async move { Ok(stocks) })
+        }
+
+        fn delete(
+            &self,
+            _stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(false) })
+        }
+    }
+
+    #[derive(Default)]
+    struct SpyingPriceRepo {
+        /// Count of rows handed to `upsert_many`, per invocation.
+        upserts: Mutex<Vec<Vec<NewPrice>>>,
+    }
+
+    impl SpyingPriceRepo {
+        fn upserted_rows(&self) -> Vec<NewPrice> {
+            self.upserts.lock().unwrap().iter().flatten().cloned().collect()
+        }
+    }
+
+    // Clone needed because NewPrice isn't Clone by default — derive it in the fake
+    // by collecting manually below. For simpler assertions we just count and sample.
+    impl StockPriceRepository for SpyingPriceRepo {
+        fn upsert_many(
+            &self,
+            prices: Vec<NewPrice>,
+        ) -> Pin<Box<dyn Future<Output = Result<usize, AppError>> + Send + '_>> {
+            let count = prices.len();
+            self.upserts.lock().unwrap().push(prices);
+            Box::pin(async move { Ok(count) })
+        }
+
+        fn find_latest(
+            &self,
+            _stock_id: i32,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<Price>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(None) })
+        }
+
+        fn find_latest_batch(
+            &self,
+            _stock_ids: Vec<i32>,
+        ) -> Pin<Box<dyn Future<Output = Result<HashMap<i32, Price>, AppError>> + Send + '_>>
+        {
+            Box::pin(async move { Ok(HashMap::new()) })
+        }
+
+        fn find_history(
+            &self,
+            _stock_id: i32,
+            _from: NaiveDate,
+            _to: NaiveDate,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<Price>, AppError>> + Send + '_>> {
+            Box::pin(async move { Ok(Vec::new()) })
+        }
+    }
+
+    /// Deterministic fetcher: per symbol, returns the prices configured or an error.
+    struct ProgrammableFetcher {
+        by_symbol: HashMap<String, Result<Vec<FetchedPrice>, String>>,
+    }
+
+    impl PriceFetcher for ProgrammableFetcher {
+        fn fetch_history(
+            &self,
+            symbol: String,
+            _from: NaiveDate,
+            _to: NaiveDate,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<FetchedPrice>, AppError>> + Send + '_>>
+        {
+            let outcome = self.by_symbol.get(&symbol).cloned();
+            Box::pin(async move {
+                match outcome {
+                    Some(Ok(prices)) => Ok(prices),
+                    Some(Err(msg)) => {
+                        Err(AppError::Internal(Box::<dyn std::error::Error + Send + Sync>::from(msg)))
+                    }
+                    None => Ok(Vec::new()),
+                }
+            })
+        }
+    }
+
+    // ---------- helpers ----------
+
+    fn stock(id: i32, symbol: &str) -> Stock {
+        Stock {
+            id,
+            symbol: symbol.to_string(),
+            name: format!("Stock {id}"),
+            isin: format!("ISIN{id:04}"),
+            currency: "EUR".to_string(),
+            market_region: MarketRegion::Europe,
+            market: None,
+            sector: None,
+            industry: None,
+            country: None,
+        }
+    }
+
+    fn fetched(date_str: (i32, u32, u32), close: &str) -> FetchedPrice {
+        FetchedPrice {
+            price_date: NaiveDate::from_ymd_opt(date_str.0, date_str.1, date_str.2).unwrap(),
+            close: Decimal::from_str(close).unwrap(),
+            source: "yahoo".to_string(),
+        }
+    }
+
+    // ---------- tests ----------
+
+    #[tokio::test]
+    async fn fetch_region_reports_empty_when_no_stocks_in_region() {
+        let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, vec![]));
+        let price_repo = Arc::new(SpyingPriceRepo::default());
+        let fetcher = Arc::new(ProgrammableFetcher {
+            by_symbol: HashMap::new(),
+        });
+        let service = PriceBatchService::new(stock_repo, price_repo.clone(), fetcher);
+
+        let report = service.fetch_region(MarketRegion::Europe).await.unwrap();
+
+        assert_eq!(report.stocks_total, 0);
+        assert_eq!(report.stocks_ok, 0);
+        assert_eq!(report.stocks_failed, 0);
+        assert_eq!(report.prices_persisted, 0);
+        assert!(price_repo.upserted_rows().is_empty());
+    }
+
+    #[tokio::test]
+    async fn fetch_region_continues_when_one_stock_fetch_fails() {
+        // Two stocks, one fetch succeeds with two prices, the other errors.
+        // Batch must NOT abort: one upserted, the other counted as failed.
+        let stocks = vec![stock(1, "OK.PA"), stock(2, "KO.PA")];
+        let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, stocks));
+
+        let mut by_symbol = HashMap::new();
+        by_symbol.insert(
+            "OK.PA".to_string(),
+            Ok(vec![fetched((2026, 4, 23), "100.00"), fetched((2026, 4, 24), "101.00")]),
+        );
+        by_symbol.insert("KO.PA".to_string(), Err("rate limited".to_string()));
+        let fetcher = Arc::new(ProgrammableFetcher { by_symbol });
+
+        let price_repo = Arc::new(SpyingPriceRepo::default());
+        let service = PriceBatchService::new(stock_repo, price_repo.clone(), fetcher);
+
+        let report = service.fetch_region(MarketRegion::Europe).await.unwrap();
+
+        assert_eq!(report.stocks_total, 2);
+        assert_eq!(report.stocks_ok, 1);
+        assert_eq!(report.stocks_failed, 1);
+        assert_eq!(report.prices_persisted, 2);
+
+        let rows = price_repo.upserted_rows();
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.stock_id == 1));
+        assert!(rows.iter().all(|r| r.source == "yahoo"));
+    }
+
+    #[tokio::test]
+    async fn fetch_region_skips_upsert_call_when_nothing_to_persist() {
+        let stocks = vec![stock(1, "EMPTY.PA")];
+        let stock_repo = Arc::new(FakeStockRepo::with_region(MarketRegion::Europe, stocks));
+        // Fetcher returns an empty Vec (e.g. market closed / no trades in window).
+        let mut by_symbol = HashMap::new();
+        by_symbol.insert("EMPTY.PA".to_string(), Ok(vec![]));
+        let fetcher = Arc::new(ProgrammableFetcher { by_symbol });
+
+        let price_repo = Arc::new(SpyingPriceRepo::default());
+        let service = PriceBatchService::new(stock_repo, price_repo.clone(), fetcher);
+
+        let report = service.fetch_region(MarketRegion::Europe).await.unwrap();
+
+        assert_eq!(report.stocks_ok, 1);
+        assert_eq!(report.prices_persisted, 0);
+        // upsert_many must not have been called at all (optimisation guard).
+        assert!(price_repo.upserts.lock().unwrap().is_empty());
     }
 }
