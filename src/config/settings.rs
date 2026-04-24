@@ -11,6 +11,7 @@ pub struct Config {
     pub db: DbConfig,
     pub cors: CorsConfig,
     pub scheduler: SchedulerConfig,
+    pub auth: AuthConfig,
 }
 
 #[derive(Clone)]
@@ -37,6 +38,13 @@ pub struct SchedulerConfig {
     pub enabled: bool,
 }
 
+#[derive(Clone)]
+pub struct AuthConfig {
+    /// Shared bearer token required on every `/v1/*` request. Injected
+    /// server-side by the Nuxt proxy; healthchecks are exempted by scope.
+    pub api_key: String,
+}
+
 pub fn init() -> Result<&'static Config> {
     let api_url = env::var("API_ADDR").context("API_ADDR must be set")?;
     let port = env::var("API_PORT").context("PORT must be set")?.parse::<u16>().context("PORT must be a valid u16")?;
@@ -56,6 +64,12 @@ pub fn init() -> Result<&'static Config> {
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
         .unwrap_or(true);
 
+    let api_key = env::var("API_KEY")
+        .context("API_KEY must be set — shared bearer token required on /v1/*")?;
+    if api_key.trim().is_empty() {
+        anyhow::bail!("API_KEY must not be empty");
+    }
+
     let config = Config {
         server: ServerConfig {
             host: api_url,
@@ -64,6 +78,7 @@ pub fn init() -> Result<&'static Config> {
         db: DbConfig { database_url },
         cors: CorsConfig { allowed_origins },
         scheduler: SchedulerConfig { enabled: scheduler_enabled },
+        auth: AuthConfig { api_key },
     };
 
     Ok(CONFIG.get_or_init(|| config))

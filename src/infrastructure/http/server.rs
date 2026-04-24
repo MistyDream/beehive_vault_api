@@ -9,6 +9,7 @@ use tracing_actix_web::TracingLogger;
 
 use crate::config::settings;
 use crate::infrastructure::http::error::garde_error_handler;
+use crate::infrastructure::http::middleware::auth::BearerAuth;
 use crate::infrastructure::http::request_context::REQUEST_PATH;
 use crate::infrastructure::http::routes::configure_routes;
 use crate::infrastructure::http::state::AppState;
@@ -18,6 +19,7 @@ const JSON_BODY_LIMIT: usize = 32 * 1024;
 pub async fn run(state: AppState) -> Result<()> {
     let server_config = &settings::get().server;
     let cors_config = settings::get().cors.clone();
+    let api_key = settings::get().auth.api_key.clone();
     let app_state = web::Data::new(state);
 
     // Per-worker limit: actix-governor does not share state across workers,
@@ -62,7 +64,11 @@ pub async fn run(state: AppState) -> Result<()> {
             .wrap(cors)
             .wrap(Governor::new(&governor_conf))
             .wrap(TracingLogger::default())
-            .service(web::scope("/v1").configure(configure_routes))
+            .service(
+                web::scope("/v1")
+                    .wrap(BearerAuth::new(api_key.clone()))
+                    .configure(configure_routes),
+            )
     };
 
     HttpServer::new(app)

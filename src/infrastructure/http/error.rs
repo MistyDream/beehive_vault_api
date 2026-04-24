@@ -19,6 +19,9 @@ pub enum ApiError {
 
     #[error("Payload too large")]
     PayloadTooLarge(String),
+
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub fn garde_error_handler(err: GardeError, req: &HttpRequest) -> actix_web::Error {
@@ -64,6 +67,7 @@ impl ResponseError for ApiError {
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             ApiError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+            ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }
 
@@ -114,6 +118,12 @@ impl ResponseError for ApiError {
                 "/problems/payload-too-large",
                 "Payload Too Large".to_string(),
                 Some(msg.clone()),
+                None,
+            ),
+            ApiError::Unauthorized => (
+                "/problems/unauthorized",
+                "Unauthorized".to_string(),
+                Some("Missing or invalid API key".to_string()),
                 None,
             ),
         };
