@@ -1,6 +1,8 @@
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::domain::market::price::Price;
 use crate::domain::market::stock::Stock;
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
@@ -14,6 +16,13 @@ pub struct Position {
     pub currency: String,
     /// Share of the portfolio's total invested cost, as a fraction in [0.0, 1.0].
     pub weight: f64,
+    /// Latest persisted close price. `None` when no market data is available
+    /// (graceful degradation: the wallet keeps working when prices are missing).
+    pub current_price: Option<f64>,
+    /// `quantity * current_price`. `None` when the price is missing.
+    pub current_value: Option<f64>,
+    /// `current_value - total_cost`. `None` when the price is missing.
+    pub unrealized_pnl: Option<f64>,
 }
 
 /// Compute open positions from a chronologically ordered list of transactions.
@@ -96,10 +105,31 @@ pub fn compute_positions(
                 total_cost,
                 currency,
                 weight,
+                current_price: None,
+                current_value: None,
+                unrealized_pnl: None,
             }
         })
         .collect();
 
     positions.sort_by(|a, b| a.stock.id.cmp(&b.stock.id));
     positions
+}
+
+/// Enrich positions in place with the latest close price per stock.
+/// Positions whose stock is missing from `prices_by_stock_id` keep their
+/// `current_price` / `current_value` / `unrealized_pnl` at `None`.
+pub fn valorize_positions(positions: &mut [Position], prices_by_stock_id: &HashMap<i32, Price>) {
+    for position in positions.iter_mut() {
+        let Some(price) = prices_by_stock_id.get(&position.stock.id) else {
+            continue;
+        };
+        let Some(close) = price.close.to_f64() else {
+            continue;
+        };
+        let value = position.quantity * close;
+        position.current_price = Some(close);
+        position.current_value = Some(value);
+        position.unrealized_pnl = Some(value - position.total_cost);
+    }
 }

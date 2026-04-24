@@ -47,6 +47,7 @@ pub fn init() -> Result<Services> {
         portfolio_repo.clone(),
         transaction_repo.clone(),
         stock_repo.clone(),
+        stock_price_repo.clone(),
     ));
     let portfolio_scoring_service = Arc::new(PortfolioScoringService::new(
         portfolio_repo,

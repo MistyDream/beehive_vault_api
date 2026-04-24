@@ -16,6 +16,9 @@ pub struct PerformanceReport {
     pub taxes_paid: f64,
     /// Net cash flow: deposits - withdrawals + realized gains + dividends - fees - taxes
     pub net_result: f64,
+    /// Σ `positions.unrealized_pnl` where known. `None` when no position could
+    /// be valued (all prices missing). A partial sum otherwise.
+    pub unrealized_pnl_total: Option<f64>,
 }
 
 /// Compute a performance report from a chronologically ordered list of transactions.
@@ -119,5 +122,6 @@ pub fn compute_performance(
         fees_paid,
         taxes_paid,
         net_result,
+        unrealized_pnl_total: None,
     }
 }

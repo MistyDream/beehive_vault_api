@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
+use crate::application::ports::stock_price_repository::StockPriceRepository;
 use crate::application::ports::stock_repository::StockRepository;
 use crate::application::ports::transaction_repository::TransactionRepository;
 use crate::application::services::pagination::{paginate_slice, Page, SortDirection, DEFAULT_LIMIT, DEFAULT_PAGE};
@@ -11,7 +12,7 @@ use crate::application::services::stock_lookup::fetch_stocks_for_transactions;
 use crate::domain::wallet::cash_balance::{compute_cash_balance, CashBalance};
 use crate::domain::wallet::performance::{compute_performance, PerformanceReport};
 use crate::domain::wallet::portfolio_summary::PortfolioSummary;
-use crate::domain::wallet::position::{compute_positions, Position};
+use crate::domain::wallet::position::{compute_positions, valorize_positions, Position};
 use crate::domain::wallet::transaction::TransactionFilter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -48,6 +49,7 @@ pub struct PositionService {
     portfolio_repo: Arc<dyn PortfolioRepository>,
     transaction_repo: Arc<dyn TransactionRepository>,
     stock_repo: Arc<dyn StockRepository>,
+    price_repo: Arc<dyn StockPriceRepository>,
 }
 
 impl PositionService {
@@ -55,8 +57,9 @@ impl PositionService {
         portfolio_repo: Arc<dyn PortfolioRepository>,
         transaction_repo: Arc<dyn TransactionRepository>,
         stock_repo: Arc<dyn StockRepository>,
+        price_repo: Arc<dyn StockPriceRepository>,
     ) -> Self {
-        Self { portfolio_repo, transaction_repo, stock_repo }
+        Self { portfolio_repo, transaction_repo, stock_repo, price_repo }
     }
 
     pub async fn get_positions(&self, portfolio_id: i32) -> Result<Vec<Position>, AppError> {
@@ -64,7 +67,19 @@ impl PositionService {
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
         let stocks = fetch_stocks_for_transactions(&self.stock_repo, &transactions).await?;
-        Ok(compute_positions(&transactions, &stocks))
+        let mut positions = compute_positions(&transactions, &stocks);
+        self.enrich_with_latest_prices(&mut positions).await?;
+        Ok(positions)
+    }
+
+    async fn enrich_with_latest_prices(&self, positions: &mut [Position]) -> Result<(), AppError> {
+        if positions.is_empty() {
+            return Ok(());
+        }
+        let stock_ids: Vec<i32> = positions.iter().map(|p| p.stock.id).collect();
+        let prices = self.price_repo.find_latest_batch(stock_ids).await?;
+        valorize_positions(positions, &prices);
+        Ok(())
     }
 
     pub async fn get_positions_paginated(
@@ -108,10 +123,29 @@ impl PositionService {
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
         let stocks = fetch_stocks_for_transactions(&self.stock_repo, &transactions).await?;
-        let positions = compute_positions(&transactions, &stocks);
+        let mut positions = compute_positions(&transactions, &stocks);
+        self.enrich_with_latest_prices(&mut positions).await?;
         let cash = compute_cash_balance(&transactions, &portfolio.currency);
+
         let total_invested: f64 = positions.iter().map(|p| p.total_cost).sum();
-        Ok(PortfolioSummary { portfolio, positions, cash, total_invested })
+        let positions_without_price = positions
+            .iter()
+            .filter(|p| p.current_value.is_none())
+            .count();
+        let total_value = cash.balance
+            + positions
+                .iter()
+                .filter_map(|p| p.current_value)
+                .sum::<f64>();
+
+        Ok(PortfolioSummary {
+            portfolio,
+            positions,
+            cash,
+            total_invested,
+            total_value,
+            positions_without_price,
+        })
     }
 
     pub async fn get_performance(
@@ -135,6 +169,30 @@ impl PositionService {
                 .list_by_portfolio_chronological(portfolio_id)
                 .await?
         };
-        Ok(compute_performance(portfolio_id, &portfolio.currency, &transactions))
+
+        let mut report = compute_performance(portfolio_id, &portfolio.currency, &transactions);
+
+        // Unrealized P&L is a "now" snapshot and always uses the full
+        // transaction history — restricting it to the report's date range
+        // would give a nonsensical mid-period mark-to-market.
+        let all_transactions = if from_date.is_some() || to_date.is_some() {
+            self.transaction_repo
+                .list_by_portfolio_chronological(portfolio_id)
+                .await?
+        } else {
+            transactions
+        };
+        let stocks = fetch_stocks_for_transactions(&self.stock_repo, &all_transactions).await?;
+        let mut positions = compute_positions(&all_transactions, &stocks);
+        self.enrich_with_latest_prices(&mut positions).await?;
+
+        let unrealized: Vec<f64> = positions.iter().filter_map(|p| p.unrealized_pnl).collect();
+        report.unrealized_pnl_total = if unrealized.is_empty() {
+            None
+        } else {
+            Some(unrealized.iter().sum())
+        };
+
+        Ok(report)
     }
 }
