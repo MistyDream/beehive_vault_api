@@ -124,6 +124,10 @@ pub fn valorize_positions(positions: &mut [Position], prices_by_stock_id: &HashM
         let Some(price) = prices_by_stock_id.get(&position.stock.id) else {
             continue;
         };
+        // `to_f64` only returns `None` for Decimal values outside f64 range,
+        // which no realistic stock close can reach. The position stays unvalued
+        // in that paranoid branch and `PortfolioSummary.positions_without_price`
+        // will still surface it to the caller.
         let Some(close) = price.close.to_f64() else {
             continue;
         };

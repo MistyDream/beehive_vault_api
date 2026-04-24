@@ -16,7 +16,13 @@ async fn main() -> Result<()> {
 
     settings::init()?;
     let services = state::init()?;
-    let _scheduler = scheduler::start(services.price_batch).await?;
+
+    let _scheduler = if settings::get().scheduler.enabled {
+        Some(scheduler::start(services.price_batch).await?)
+    } else {
+        tracing::info!("price scheduler disabled (PRICE_SCHEDULER_ENABLED is off)");
+        None
+    };
 
     server::run(services.http).await
 }

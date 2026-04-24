@@ -16,7 +16,10 @@ cargo audit                          # Check Cargo.lock against RustSec advisori
 cargo deny check                     # Check licenses, duplicates, advisories (deny.toml)
 ```
 
-**Environment variables** (via `.env`): `API_ADDR`, `API_PORT`, `DATABASE_URL`
+**Environment variables** (via `.env`):
+- `API_ADDR`, `API_PORT`, `DATABASE_URL` — required
+- `CORS_ALLOWED_ORIGINS` — comma-separated; production must override to `https://...` origins
+- `PRICE_SCHEDULER_ENABLED` — `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`; defaults to enabled. Set to `false` in dev/CI so the price-batch cron doesn't hit Yahoo on every process launch.
 
 **System build dependencies**: `protoc` (e.g. `apt install protobuf-compiler`) — required by `yfinance-rs` at build time.
 

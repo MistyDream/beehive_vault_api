@@ -10,6 +10,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub db: DbConfig,
     pub cors: CorsConfig,
+    pub scheduler: SchedulerConfig,
 }
 
 #[derive(Clone)]
@@ -28,6 +29,14 @@ pub struct CorsConfig {
     pub allowed_origins: Vec<String>,
 }
 
+#[derive(Clone)]
+pub struct SchedulerConfig {
+    /// When false, the price-batch cron scheduler is not started. Intended
+    /// for local development and CI where every process launch would otherwise
+    /// hit Yahoo three times a day.
+    pub enabled: bool,
+}
+
 pub fn init() -> Result<&'static Config> {
     let api_url = env::var("API_ADDR").context("API_ADDR must be set")?;
     let port = env::var("API_PORT").context("PORT must be set")?.parse::<u16>().context("PORT must be a valid u16")?;
@@ -42,6 +51,11 @@ pub fn init() -> Result<&'static Config> {
         .filter(|s| !s.is_empty())
         .collect();
 
+    let scheduler_enabled = env::var("PRICE_SCHEDULER_ENABLED")
+        .ok()
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(true);
+
     let config = Config {
         server: ServerConfig {
             host: api_url,
@@ -49,6 +63,7 @@ pub fn init() -> Result<&'static Config> {
         },
         db: DbConfig { database_url },
         cors: CorsConfig { allowed_origins },
+        scheduler: SchedulerConfig { enabled: scheduler_enabled },
     };
 
     Ok(CONFIG.get_or_init(|| config))
