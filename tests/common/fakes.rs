@@ -347,6 +347,18 @@ impl HealthChecker for AlwaysReadyHealthChecker {
     }
 }
 
+pub struct NotReadyHealthChecker;
+
+impl HealthChecker for NotReadyHealthChecker {
+    fn readiness(&self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + '_>> {
+        Box::pin(async move {
+            Err(AppError::Internal(Box::new(std::io::Error::other(
+                "simulated readiness failure",
+            ))))
+        })
+    }
+}
+
 // ================================ Small builders =============================
 
 pub fn test_stock(id: i32, symbol: &str, currency: &str) -> Stock {

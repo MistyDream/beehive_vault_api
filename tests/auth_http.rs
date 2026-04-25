@@ -11,7 +11,7 @@ mod common;
 use std::sync::Arc;
 
 use actix_web::http::StatusCode;
-use actix_web::http::header::CONTENT_TYPE;
+use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, WWW_AUTHENTICATE};
 use actix_web::{test, web, App};
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -21,7 +21,9 @@ use beehive_vault_api::infrastructure::http::middleware::auth::BearerAuth;
 use beehive_vault_api::infrastructure::http::routes::configure_routes;
 
 use common::build_app_state;
-use common::fakes::{test_price, test_stock, InMemoryStockPriceRepo, InMemoryStockRepo};
+use common::fakes::{
+    test_price, test_stock, InMemoryStockPriceRepo, InMemoryStockRepo, NotReadyHealthChecker,
+};
 
 const PROBLEM_JSON: &str = "application/problem+json";
 const TEST_KEY: &str = "bhv_test_0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab";
@@ -116,6 +118,80 @@ async fn v1_returns_200_when_bearer_token_matches() {
     assert_eq!(resp.status(), StatusCode::OK);
 }
 
+#[actix_web::test]
+async fn v1_includes_www_authenticate_header_on_401() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    let www_auth = resp
+        .headers()
+        .get(WWW_AUTHENTICATE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(
+        www_auth.starts_with("Bearer"),
+        "RFC 9110 §15.5.2 requires Bearer in WWW-Authenticate, got {www_auth:?}"
+    );
+}
+
+#[actix_web::test]
+async fn v1_accepts_lowercase_bearer_scheme() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header(("Authorization", format!("bearer {TEST_KEY}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
+async fn v1_returns_401_for_same_length_wrong_token() {
+    let app = make_service!(TEST_KEY);
+    // Same length as TEST_KEY but every byte differs — exercises the
+    // per-byte constant-time comparison, not just the length early-return.
+    let wrong = "x".repeat(TEST_KEY.len());
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header(("Authorization", format!("Bearer {wrong}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn v1_returns_401_for_non_bearer_scheme() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header(("Authorization", "Basic dXNlcjpwYXNz"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn v1_returns_401_for_empty_bearer_token() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header(("Authorization", "Bearer "))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
 // =============================== Healthchecks ================================
 
 #[actix_web::test]
@@ -136,4 +212,58 @@ async fn readyz_returns_200_without_authorization_when_health_checker_is_ready()
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
+async fn readyz_returns_503_when_health_checker_is_not_ready() {
+    // Bypass the macro so we can swap the HealthChecker port for a failing one.
+    let stock_repo = Arc::new(InMemoryStockRepo::new(vec![test_stock(1, "AAPL", "USD")]));
+    let price_repo = Arc::new(InMemoryStockPriceRepo::with_prices(vec![test_price(
+        1,
+        date(2026, 4, 24),
+        "170.25",
+    )]));
+    let mut state = build_app_state(stock_repo, price_repo);
+    state.health_checker = Arc::new(NotReadyHealthChecker);
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .configure(health_controller::configure),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/readyz").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[actix_web::test]
+async fn healthz_sets_cache_control_no_store() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get().uri("/healthz").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    let cc = resp
+        .headers()
+        .get(CACHE_CONTROL)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert_eq!(cc, "no-store");
+}
+
+#[actix_web::test]
+async fn readyz_sets_cache_control_no_store() {
+    let app = make_service!(TEST_KEY);
+
+    let req = test::TestRequest::get().uri("/readyz").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    let cc = resp
+        .headers()
+        .get(CACHE_CONTROL)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert_eq!(cc, "no-store");
 }
