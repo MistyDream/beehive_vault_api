@@ -16,7 +16,7 @@ use beehive_vault_api::application::services::transaction_service::TransactionSe
 use beehive_vault_api::infrastructure::http::state::AppState;
 
 use fakes::{
-    NoOpPortfolioRepo, NoOpScoreSnapshotRepo, NoOpTransactionRepo,
+    AlwaysReadyHealthChecker, NoOpPortfolioRepo, NoOpScoreSnapshotRepo, NoOpTransactionRepo,
 };
 
 /// Build a complete `AppState` where only the stock + price repositories are
@@ -49,6 +49,7 @@ pub fn build_app_state(
         score_repo,
     ));
     let price_service = Arc::new(PriceService::new(stock_repo, stock_price_repo));
+    let health_checker = Arc::new(AlwaysReadyHealthChecker);
 
     AppState {
         portfolio_service,
@@ -56,5 +57,6 @@ pub fn build_app_state(
         position_service,
         portfolio_scoring_service,
         price_service,
+        health_checker,
     }
 }

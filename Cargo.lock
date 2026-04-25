@@ -340,6 +340,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "subtle",
  "thiserror",
  "tokio",
  "tokio-cron-scheduler",

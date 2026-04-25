@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::application::ports::health_checker::HealthChecker;
 use crate::application::services::portfolio_scoring_service::PortfolioScoringService;
 use crate::application::services::portfolio_service::PortfolioService;
 use crate::application::services::position_service::PositionService;
@@ -13,4 +14,5 @@ pub struct AppState {
     pub position_service: Arc<PositionService>,
     pub portfolio_scoring_service: Arc<PortfolioScoringService>,
     pub price_service: Arc<PriceService>,
+    pub health_checker: Arc<dyn HealthChecker>,
 }

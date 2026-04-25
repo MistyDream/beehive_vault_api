@@ -15,6 +15,7 @@ use std::sync::Mutex;
 use chrono::NaiveDate;
 
 use beehive_vault_api::application::error::AppError;
+use beehive_vault_api::application::ports::health_checker::HealthChecker;
 use beehive_vault_api::application::ports::portfolio_repository::PortfolioRepository;
 use beehive_vault_api::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
 use beehive_vault_api::application::ports::stock_price_repository::StockPriceRepository;
@@ -335,6 +336,26 @@ impl ScoreSnapshotRepository for NoOpScoreSnapshotRepo {
         _stock_id: i32,
     ) -> Pin<Box<dyn Future<Output = Result<usize, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(0) })
+    }
+}
+
+pub struct AlwaysReadyHealthChecker;
+
+impl HealthChecker for AlwaysReadyHealthChecker {
+    fn readiness(&self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + '_>> {
+        Box::pin(async move { Ok(()) })
+    }
+}
+
+pub struct NotReadyHealthChecker;
+
+impl HealthChecker for NotReadyHealthChecker {
+    fn readiness(&self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + '_>> {
+        Box::pin(async move {
+            Err(AppError::Internal(Box::new(std::io::Error::other(
+                "simulated readiness failure",
+            ))))
+        })
     }
 }
 

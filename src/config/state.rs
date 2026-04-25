@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use crate::application::ports::health_checker::HealthChecker;
 use crate::application::services::portfolio_scoring_service::PortfolioScoringService;
 use crate::application::services::portfolio_service::PortfolioService;
 use crate::application::services::position_service::PositionService;
@@ -34,7 +35,8 @@ pub fn init() -> Result<Services> {
     let transaction_repo = Arc::new(PgTransactionRepository::new(db.clone()));
     let stock_repo = Arc::new(PgStockRepository::new(db.clone()));
     let stock_price_repo = Arc::new(PgStockPriceRepository::new(db.clone()));
-    let score_repo = Arc::new(PgScoreSnapshotRepository::new(db));
+    let score_repo = Arc::new(PgScoreSnapshotRepository::new(db.clone()));
+    let health_checker = Arc::new(db) as Arc<dyn HealthChecker>;
     let price_fetcher = Arc::new(YFinancePriceFetcher::new());
 
     let portfolio_service = Arc::new(PortfolioService::new(portfolio_repo.clone()));
@@ -69,6 +71,7 @@ pub fn init() -> Result<Services> {
             position_service,
             portfolio_scoring_service,
             price_service,
+            health_checker,
         },
         price_batch: price_batch_service,
     })

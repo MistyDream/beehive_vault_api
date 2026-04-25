@@ -1,3 +1,4 @@
+pub mod health_checker;
 pub mod portfolio_repository;
 pub mod price_fetcher;
 pub mod score_snapshot_repository;

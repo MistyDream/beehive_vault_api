@@ -18,6 +18,7 @@ cargo deny check                     # Check licenses, duplicates, advisories (d
 
 **Environment variables** (via `.env`):
 - `API_ADDR`, `API_PORT`, `DATABASE_URL` — required
+- `API_KEY` — required; shared bearer token validated by the `BearerAuth` middleware on every `/v1/*` request. Format convention: `bhv_<env>_<hex-32>` (e.g. `bhv_dev_a3f2…`). Constant-time comparison (`subtle`), never logged. Healthchecks (`/healthz`, `/readyz`) are exempted.
 - `CORS_ALLOWED_ORIGINS` — comma-separated; production must override to `https://...` origins
 - `PRICE_SCHEDULER_ENABLED` — `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`; defaults to enabled. Set to `false` in dev/CI so the price-batch cron doesn't hit Yahoo on every process launch.
 

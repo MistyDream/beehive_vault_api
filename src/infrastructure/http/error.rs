@@ -19,6 +19,9 @@ pub enum ApiError {
 
     #[error("Payload too large")]
     PayloadTooLarge(String),
+
+    #[error("Unauthorized")]
+    Unauthorized,
 }
 
 pub fn garde_error_handler(err: GardeError, req: &HttpRequest) -> actix_web::Error {
@@ -64,6 +67,7 @@ impl ResponseError for ApiError {
             ApiError::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             ApiError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+            ApiError::Unauthorized => StatusCode::UNAUTHORIZED,
         }
     }
 
@@ -116,17 +120,27 @@ impl ResponseError for ApiError {
                 Some(msg.clone()),
                 None,
             ),
+            ApiError::Unauthorized => (
+                "/problems/unauthorized",
+                "Unauthorized".to_string(),
+                Some("Missing or invalid API key".to_string()),
+                None,
+            ),
         };
 
-        HttpResponse::build(status)
-            .content_type("application/problem+json")
-            .json(ProblemDetail {
-                problem_type: problem_type.to_string(),
-                title,
-                status: status.as_u16(),
-                detail,
-                instance: current_path(),
-                errors,
-            })
+        let mut builder = HttpResponse::build(status);
+        builder.content_type("application/problem+json");
+        // RFC 9110 §15.5.2 / RFC 6750 §3: 401 MUST carry WWW-Authenticate.
+        if matches!(self, ApiError::Unauthorized) {
+            builder.insert_header(("WWW-Authenticate", "Bearer realm=\"api\""));
+        }
+        builder.json(ProblemDetail {
+            problem_type: problem_type.to_string(),
+            title,
+            status: status.as_u16(),
+            detail,
+            instance: current_path(),
+            errors,
+        })
     }
 }
