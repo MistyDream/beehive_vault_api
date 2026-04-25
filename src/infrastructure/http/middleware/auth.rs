@@ -8,7 +8,7 @@
 //! the scope and are therefore implicitly exempt — the middleware never
 //! runs for them.
 
-use std::future::{ready, Ready};
+use std::future::{ready, Future, Ready};
 use std::pin::Pin;
 use std::rc::Rc;
 
@@ -16,7 +16,6 @@ use actix_web::body::EitherBody;
 use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::http::header::AUTHORIZATION;
 use actix_web::{Error, ResponseError};
-use futures_util::future::Future;
 use subtle::ConstantTimeEq;
 
 use crate::infrastructure::http::error::ApiError;

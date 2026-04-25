@@ -335,7 +335,6 @@ dependencies = [
  "chrono",
  "diesel",
  "dotenvy",
- "futures-util",
  "garde",
  "garde-actix-web",
  "rust_decimal",

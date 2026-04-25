@@ -24,7 +24,6 @@ rust_decimal = { version = "1.41", features = ["db-diesel2-postgres", "serde-str
 yfinance-rs = { version = "0.7.2", features = ["tracing"] }
 tokio-cron-scheduler = "0.15"
 subtle = "2"
-futures-util = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1.49.0", features = ["rt", "macros"] }
