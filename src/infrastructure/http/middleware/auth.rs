@@ -72,7 +72,11 @@ where
             .headers()
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "));
+            .and_then(|v| {
+                // RFC 9110 §11.1: auth-scheme is matched case-insensitively.
+                let (scheme, token) = v.split_once(' ')?;
+                scheme.eq_ignore_ascii_case("Bearer").then_some(token)
+            });
 
         let authorized = match presented {
             Some(token) => bool::from(self.expected.as_bytes().ct_eq(token.as_bytes())),

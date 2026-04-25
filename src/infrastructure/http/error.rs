@@ -128,15 +128,19 @@ impl ResponseError for ApiError {
             ),
         };
 
-        HttpResponse::build(status)
-            .content_type("application/problem+json")
-            .json(ProblemDetail {
-                problem_type: problem_type.to_string(),
-                title,
-                status: status.as_u16(),
-                detail,
-                instance: current_path(),
-                errors,
-            })
+        let mut builder = HttpResponse::build(status);
+        builder.content_type("application/problem+json");
+        // RFC 9110 §15.5.2 / RFC 6750 §3: 401 MUST carry WWW-Authenticate.
+        if matches!(self, ApiError::Unauthorized) {
+            builder.insert_header(("WWW-Authenticate", "Bearer realm=\"api\""));
+        }
+        builder.json(ProblemDetail {
+            problem_type: problem_type.to_string(),
+            title,
+            status: status.as_u16(),
+            detail,
+            instance: current_path(),
+            errors,
+        })
     }
 }
