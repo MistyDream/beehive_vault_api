@@ -63,12 +63,12 @@ pub async fn run(state: AppState) -> Result<()> {
             })
             .wrap(security_headers)
             .wrap(cors)
-            .wrap(Governor::new(&governor_conf))
             .wrap(TracingLogger::default())
             .configure(health_controller::configure)
             .service(
                 web::scope("/v1")
                     .wrap(BearerAuth::new(api_key.clone()))
+                    .wrap(Governor::new(&governor_conf))
                     .configure(configure_routes),
             )
     };
