@@ -138,6 +138,19 @@ async fn v1_includes_www_authenticate_header_on_401() {
 }
 
 #[actix_web::test]
+async fn v1_accepts_extra_whitespace_between_scheme_and_token() {
+    let app = make_service!(TEST_KEY);
+    // RFC 7235 §2.1 allows 1*SP between scheme and credentials.
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/1/price")
+        .insert_header(("Authorization", format!("Bearer   {TEST_KEY}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
 async fn v1_accepts_lowercase_bearer_scheme() {
     let app = make_service!(TEST_KEY);
 

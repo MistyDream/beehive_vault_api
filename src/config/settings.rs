@@ -64,9 +64,14 @@ pub fn init() -> Result<&'static Config> {
         .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
         .unwrap_or(true);
 
+    // Trim before storing: a stray newline from `.env`, `docker --env-file`,
+    // or `$(cat key_file)` would otherwise survive into the runtime token
+    // and silently fail every constant-time comparison.
     let api_key = env::var("API_KEY")
-        .context("API_KEY must be set — shared bearer token required on /v1/*")?;
-    if api_key.trim().is_empty() {
+        .context("API_KEY must be set — shared bearer token required on /v1/*")?
+        .trim()
+        .to_string();
+    if api_key.is_empty() {
         anyhow::bail!("API_KEY must not be empty");
     }
 

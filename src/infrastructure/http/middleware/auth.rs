@@ -74,8 +74,10 @@ where
             .and_then(|v| v.to_str().ok())
             .and_then(|v| {
                 // RFC 9110 §11.1: auth-scheme is matched case-insensitively.
+                // RFC 7235 §2.1: `auth-scheme 1*SP credentials` — collapse
+                // any extra leading whitespace before the token.
                 let (scheme, token) = v.split_once(' ')?;
-                scheme.eq_ignore_ascii_case("Bearer").then_some(token)
+                scheme.eq_ignore_ascii_case("Bearer").then_some(token.trim_start())
             });
 
         let authorized = match presented {
