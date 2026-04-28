@@ -22,6 +22,17 @@ use crate::schema::stocks;
 /// out the most pathological queries.
 const SEARCH_LIMIT: i64 = 50;
 
+/// Escape Postgres LIKE wildcards in user input so a query like `?q=%` or
+/// `?q=_` cannot widen the pattern to match every row. The default LIKE escape
+/// character in Postgres is `\`, which is escaped first to avoid double-
+/// escaping the backslashes added in the subsequent passes.
+fn escape_like_pattern(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 #[derive(Clone)]
 pub struct PgStockRepository {
     db: Db,
@@ -128,13 +139,7 @@ impl StockRepository for PgStockRepository {
         query: String,
     ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
         Box::pin(async move {
-            // Escape LIKE wildcards in the user input so they cannot widen the
-            // pattern. Postgres' default LIKE escape character is `\`.
-            let escaped = query
-                .replace('\\', "\\\\")
-                .replace('%', "\\%")
-                .replace('_', "\\_");
-            let pattern = format!("%{}%", escaped);
+            let pattern = format!("%{}%", escape_like_pattern(&query));
             self.db
                 .exec(move |conn| {
                     // Probe with `LIMIT + 1` so we can tell the client whether
@@ -200,5 +205,31 @@ impl StockRepository for PgStockRepository {
                 .await
                 .map_err(AppError::from)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_like_pattern;
+
+    #[test]
+    fn escape_doubles_backslash_first_so_added_backslashes_are_not_re_escaped() {
+        assert_eq!(escape_like_pattern("a\\b"), "a\\\\b");
+    }
+
+    #[test]
+    fn escape_neutralises_percent_and_underscore_wildcards() {
+        assert_eq!(escape_like_pattern("50%"), "50\\%");
+        assert_eq!(escape_like_pattern("a_b"), "a\\_b");
+    }
+
+    #[test]
+    fn escape_handles_combined_metacharacters() {
+        assert_eq!(escape_like_pattern("100%_off\\"), "100\\%\\_off\\\\");
+    }
+
+    #[test]
+    fn escape_passes_through_normal_characters() {
+        assert_eq!(escape_like_pattern("AAPL"), "AAPL");
     }
 }
