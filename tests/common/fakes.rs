@@ -89,10 +89,11 @@ impl StockRepository for InMemoryStockRepo {
     fn search(
         &self,
         query: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
         Box::pin(async move {
+            const FAKE_SEARCH_LIMIT: usize = 50;
             let needle = query.to_lowercase();
-            Ok(self
+            let mut items: Vec<Stock> = self
                 .by_id
                 .lock()
                 .unwrap()
@@ -103,7 +104,12 @@ impl StockRepository for InMemoryStockRepo {
                         || s.isin.to_lowercase().contains(&needle)
                 })
                 .cloned()
-                .collect())
+                .collect();
+            let truncated = items.len() > FAKE_SEARCH_LIMIT;
+            if truncated {
+                items.truncate(FAKE_SEARCH_LIMIT);
+            }
+            Ok((items, truncated))
         })
     }
 

@@ -193,8 +193,8 @@ mod tests {
         fn search(
             &self,
             _query: String,
-        ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
-            Box::pin(async move { Ok(Vec::new()) })
+        ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
+            Box::pin(async move { Ok((Vec::new(), false)) })
         }
 
         fn list_by_region(

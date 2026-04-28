@@ -16,11 +16,12 @@ pub trait StockRepository: Send + Sync {
 
     /// Case-insensitive substring search on `symbol`, `name`, and `isin`.
     /// The adapter is expected to cap the result set as a defence-in-depth
-    /// against unbounded responses.
+    /// against unbounded responses. Returns `(items, truncated)` so callers
+    /// can signal to the client when the cap was reached.
     fn search(
         &self,
         query: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>>;
 
     fn list_by_region(
         &self,

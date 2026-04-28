@@ -13,7 +13,10 @@ impl StockService {
         Self { repo }
     }
 
-    pub async fn search(&self, query: String) -> Result<Vec<Stock>, AppError> {
+    /// Returns `(items, truncated)`. `truncated` is `true` when the underlying
+    /// repository capped the result set; the controller surfaces this to the
+    /// client via a response header.
+    pub async fn search(&self, query: String) -> Result<(Vec<Stock>, bool), AppError> {
         self.repo.search(query).await
     }
 }

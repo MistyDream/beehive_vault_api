@@ -126,7 +126,7 @@ impl StockRepository for PgStockRepository {
     fn search(
         &self,
         query: String,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
         Box::pin(async move {
             // Escape LIKE wildcards in the user input so they cannot widen the
             // pattern. Postgres' default LIKE escape character is `\`.
@@ -137,7 +137,10 @@ impl StockRepository for PgStockRepository {
             let pattern = format!("%{}%", escaped);
             self.db
                 .exec(move |conn| {
-                    let rows = stocks::table
+                    // Probe with `LIMIT + 1` so we can tell the client whether
+                    // the result set was capped (truncated) without exposing
+                    // an unbounded scan if the search is unselective.
+                    let mut rows = stocks::table
                         .filter(
                             stocks::symbol
                                 .ilike(&pattern)
@@ -146,9 +149,17 @@ impl StockRepository for PgStockRepository {
                         )
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
-                        .limit(SEARCH_LIMIT)
-                        .load(conn)?;
-                    rows.into_iter().map(Stock::try_from).collect()
+                        .limit(SEARCH_LIMIT + 1)
+                        .load::<StockRow>(conn)?;
+                    let truncated = rows.len() as i64 > SEARCH_LIMIT;
+                    if truncated {
+                        rows.truncate(SEARCH_LIMIT as usize);
+                    }
+                    let stocks: Vec<Stock> = rows
+                        .into_iter()
+                        .map(Stock::try_from)
+                        .collect::<Result<_, _>>()?;
+                    Ok((stocks, truncated))
                 })
                 .await
                 .map_err(AppError::from)
