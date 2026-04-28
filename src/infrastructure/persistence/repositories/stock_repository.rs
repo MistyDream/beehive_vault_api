@@ -15,6 +15,13 @@ use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
 use crate::schema::stocks;
 
+/// Hard cap on `search` result size. Aligned with the typical picker UX (a
+/// dropdown showing 50 matches is more than any user will scroll through) and
+/// keeps a single client query from scanning the whole `stocks` table when the
+/// search term is unselective. The DTO-level `length(min = 2)` already filters
+/// out the most pathological queries.
+const SEARCH_LIMIT: i64 = 50;
+
 #[derive(Clone)]
 pub struct PgStockRepository {
     db: Db,
@@ -116,15 +123,30 @@ impl StockRepository for PgStockRepository {
         })
     }
 
-    fn list_all(
+    fn search(
         &self,
+        query: String,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
         Box::pin(async move {
+            // Escape LIKE wildcards in the user input so they cannot widen the
+            // pattern. Postgres' default LIKE escape character is `\`.
+            let escaped = query
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_");
+            let pattern = format!("%{}%", escaped);
             self.db
                 .exec(move |conn| {
                     let rows = stocks::table
+                        .filter(
+                            stocks::symbol
+                                .ilike(&pattern)
+                                .or(stocks::name.ilike(&pattern))
+                                .or(stocks::isin.ilike(&pattern)),
+                        )
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
+                        .limit(SEARCH_LIMIT)
                         .load(conn)?;
                     rows.into_iter().map(Stock::try_from).collect()
                 })

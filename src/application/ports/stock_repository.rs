@@ -14,7 +14,13 @@ pub trait StockRepository: Send + Sync {
 
     fn find_by_isin(&self, isin: String) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
 
-    fn list_all(&self) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>>;
+    /// Case-insensitive substring search on `symbol`, `name`, and `isin`.
+    /// The adapter is expected to cap the result set as a defence-in-depth
+    /// against unbounded responses.
+    fn search(
+        &self,
+        query: String,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>>;
 
     fn list_by_region(
         &self,

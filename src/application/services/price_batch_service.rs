@@ -190,8 +190,9 @@ mod tests {
             Box::pin(async move { Err(AppError::NotFound) })
         }
 
-        fn list_all(
+        fn search(
             &self,
+            _query: String,
         ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
             Box::pin(async move { Ok(Vec::new()) })
         }

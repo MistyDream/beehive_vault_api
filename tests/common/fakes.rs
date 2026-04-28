@@ -86,11 +86,24 @@ impl StockRepository for InMemoryStockRepo {
         Box::pin(async move { Err(AppError::NotFound) })
     }
 
-    fn list_all(
+    fn search(
         &self,
+        query: String,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
         Box::pin(async move {
-            Ok(self.by_id.lock().unwrap().values().cloned().collect())
+            let needle = query.to_lowercase();
+            Ok(self
+                .by_id
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|s| {
+                    s.symbol.to_lowercase().contains(&needle)
+                        || s.name.to_lowercase().contains(&needle)
+                        || s.isin.to_lowercase().contains(&needle)
+                })
+                .cloned()
+                .collect())
         })
     }
 

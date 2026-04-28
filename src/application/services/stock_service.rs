@@ -13,7 +13,7 @@ impl StockService {
         Self { repo }
     }
 
-    pub async fn list(&self) -> Result<Vec<Stock>, AppError> {
-        self.repo.list_all().await
+    pub async fn search(&self, query: String) -> Result<Vec<Stock>, AppError> {
+        self.repo.search(query).await
     }
 }

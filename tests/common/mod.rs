@@ -12,6 +12,7 @@ use beehive_vault_api::application::services::portfolio_scoring_service::Portfol
 use beehive_vault_api::application::services::portfolio_service::PortfolioService;
 use beehive_vault_api::application::services::position_service::PositionService;
 use beehive_vault_api::application::services::price_service::PriceService;
+use beehive_vault_api::application::services::stock_service::StockService;
 use beehive_vault_api::application::services::transaction_service::TransactionService;
 use beehive_vault_api::infrastructure::http::state::AppState;
 
@@ -48,7 +49,8 @@ pub fn build_app_state(
         stock_repo.clone(),
         score_repo,
     ));
-    let price_service = Arc::new(PriceService::new(stock_repo, stock_price_repo));
+    let price_service = Arc::new(PriceService::new(stock_repo.clone(), stock_price_repo));
+    let stock_service = Arc::new(StockService::new(stock_repo));
     let health_checker = Arc::new(AlwaysReadyHealthChecker);
 
     AppState {
@@ -57,6 +59,7 @@ pub fn build_app_state(
         position_service,
         portfolio_scoring_service,
         price_service,
+        stock_service,
         health_checker,
     }
 }
