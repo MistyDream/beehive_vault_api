@@ -258,6 +258,27 @@ async fn search_sets_x_result_truncated_when_cap_reached() {
 }
 
 #[actix_web::test]
+async fn search_handles_url_encoded_like_wildcards_safely() {
+    // %25%25 decodes to `%%`. The prod adapter's escape neutralises both
+    // wildcards so the SQL pattern stays narrow; the in-memory fake just does
+    // a literal substring match. Either way the response must be a clean 200
+    // with an empty array — never an unbounded match or a server error.
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![test_stock(1, "AAPL", "USD")])),
+        empty_price_repo(),
+    );
+
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks?q=%25%25")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = test::read_body_json(resp).await;
+    assert_eq!(body, serde_json::json!([]));
+}
+
+#[actix_web::test]
 async fn search_omits_x_result_truncated_when_below_cap() {
     let stocks: Vec<_> = (1..=5)
         .map(|i| test_stock(i, &format!("S{i}"), "USD"))

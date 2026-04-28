@@ -23,10 +23,25 @@ pub fn respond_with_etag<T: Serialize>(
     value: &T,
     cache_control: &str,
 ) -> Result<HttpResponse, ApiError> {
+    respond_with_etag_qualified(request, value, cache_control, &[])
+}
+
+/// Like `respond_with_etag` but folds `discriminator` into the ETag input so
+/// representations that share the same body bytes but differ in some other
+/// dimension (e.g. a `truncated` flag carried in a header) are not collapsed
+/// into the same cache key.
+pub fn respond_with_etag_qualified<T: Serialize>(
+    request: &HttpRequest,
+    value: &T,
+    cache_control: &str,
+    discriminator: &[u8],
+) -> Result<HttpResponse, ApiError> {
     let body = serde_json::to_vec(value)
         .map_err(|e| AppError::Internal(Box::new(e)))?;
 
-    let etag = format!("\"{:016x}\"", fnv1a_64(&body));
+    let mut hash_input = body.clone();
+    hash_input.extend_from_slice(discriminator);
+    let etag = format!("\"{:016x}\"", fnv1a_64(&hash_input));
 
     // RFC 9110 §13.1.2: `If-None-Match: *` matches any current representation,
     // so when we are about to return a representation (the 200 path below), any

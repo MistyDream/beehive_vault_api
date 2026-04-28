@@ -6,7 +6,7 @@ use serde::Deserialize;
 pub struct StockSearchQuery {
     /// Optional: a missing `q` produces a 400 from the controller; a present
     /// but invalid `q` produces a 422 from this validator.
-    #[garde(inner(length(max = 50), custom(non_blank_min_2)))]
+    #[garde(inner(length(chars, max = 50), custom(non_blank_min_2)))]
     pub q: Option<String>,
 }
 

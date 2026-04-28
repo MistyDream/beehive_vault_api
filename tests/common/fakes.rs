@@ -107,6 +107,9 @@ impl StockRepository for InMemoryStockRepo {
                 })
                 .cloned()
                 .collect();
+            // Mirror the prod adapter's `ORDER BY symbol ASC` so the cap evicts
+            // the same items in tests as it would in production.
+            items.sort_by(|a, b| a.symbol.cmp(&b.symbol));
             let truncated = items.len() > FAKE_SEARCH_LIMIT;
             if truncated {
                 items.truncate(FAKE_SEARCH_LIMIT);

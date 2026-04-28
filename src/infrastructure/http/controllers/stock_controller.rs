@@ -8,7 +8,7 @@ use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 use crate::infrastructure::http::dto::request::stock_request::StockSearchQuery;
 use crate::infrastructure::http::dto::response::stock_response::StockResponse;
 use crate::infrastructure::http::error::ApiError;
-use crate::infrastructure::http::etag::respond_with_etag;
+use crate::infrastructure::http::etag::respond_with_etag_qualified;
 use crate::infrastructure::http::state::AppState;
 
 const X_RESULT_TRUNCATED: HeaderName = HeaderName::from_static("x-result-truncated");
@@ -26,7 +26,12 @@ pub async fn search_stocks(
     let StockSearchResult { items, truncated } =
         state.stock_service.search(q.trim().to_string()).await?;
     let response: Vec<StockResponse> = items.into_iter().map(StockResponse::from).collect();
-    let mut http_response = respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)?;
+    // Fold `truncated` into the ETag so a representation that shares its body
+    // bytes with a previous response but differs in truncation status does not
+    // get a 304 that drops the truncation signal.
+    let discriminator: &[u8] = if truncated { b"t" } else { b"f" };
+    let mut http_response =
+        respond_with_etag_qualified(&request, &response, PRIVATE_SHORT_CACHE, discriminator)?;
     if truncated {
         http_response
             .headers_mut()
