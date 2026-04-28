@@ -8,6 +8,7 @@ use crate::application::services::portfolio_service::PortfolioService;
 use crate::application::services::position_service::PositionService;
 use crate::application::services::price_batch_service::PriceBatchService;
 use crate::application::services::price_service::PriceService;
+use crate::application::services::stock_service::StockService;
 use crate::application::services::transaction_service::TransactionService;
 use crate::config::settings;
 use crate::infrastructure::http::state::AppState;
@@ -58,6 +59,7 @@ pub fn init() -> Result<Services> {
         score_repo,
     ));
     let price_service = Arc::new(PriceService::new(stock_repo.clone(), stock_price_repo.clone()));
+    let stock_service = Arc::new(StockService::new(stock_repo.clone()));
     let price_batch_service = Arc::new(PriceBatchService::new(
         stock_repo,
         stock_price_repo,
@@ -71,6 +73,7 @@ pub fn init() -> Result<Services> {
             position_service,
             portfolio_scoring_service,
             price_service,
+            stock_service,
             health_checker,
         },
         price_batch: price_batch_service,
