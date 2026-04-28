@@ -19,7 +19,9 @@ use beehive_vault_api::application::ports::health_checker::HealthChecker;
 use beehive_vault_api::application::ports::portfolio_repository::PortfolioRepository;
 use beehive_vault_api::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
 use beehive_vault_api::application::ports::stock_price_repository::StockPriceRepository;
-use beehive_vault_api::application::ports::stock_repository::StockRepository;
+use beehive_vault_api::application::ports::stock_repository::{
+    StockRepository, StockSearchResult,
+};
 use beehive_vault_api::application::ports::transaction_repository::TransactionRepository;
 use beehive_vault_api::domain::market::enums::MarketRegion;
 use beehive_vault_api::domain::market::price::{NewPrice, Price};
@@ -89,7 +91,7 @@ impl StockRepository for InMemoryStockRepo {
     fn search(
         &self,
         query: String,
-    ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>> {
         Box::pin(async move {
             const FAKE_SEARCH_LIMIT: usize = 50;
             let needle = query.to_lowercase();
@@ -109,7 +111,7 @@ impl StockRepository for InMemoryStockRepo {
             if truncated {
                 items.truncate(FAKE_SEARCH_LIMIT);
             }
-            Ok((items, truncated))
+            Ok(StockSearchResult { items, truncated })
         })
     }
 

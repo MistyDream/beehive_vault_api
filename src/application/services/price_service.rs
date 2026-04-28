@@ -77,6 +77,7 @@ mod tests {
     use std::pin::Pin;
     use std::sync::Mutex;
 
+    use crate::application::ports::stock_repository::StockSearchResult;
     use crate::domain::market::enums::MarketRegion;
 
     // ---------- minimal fakes for the two ports the service depends on ----------
@@ -147,8 +148,14 @@ mod tests {
         fn search(
             &self,
             _query: String,
-        ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
-            Box::pin(async move { Ok((Vec::new(), false)) })
+        ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>>
+        {
+            Box::pin(async move {
+                Ok(StockSearchResult {
+                    items: Vec::new(),
+                    truncated: false,
+                })
+            })
         }
 
         fn list_by_region(

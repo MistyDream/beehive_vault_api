@@ -8,24 +8,18 @@ use std::pin::Pin;
 use diesel::prelude::*;
 
 use crate::application::error::AppError;
-use crate::application::ports::stock_repository::StockRepository;
+use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
 use crate::domain::market::enums::MarketRegion;
 use crate::domain::market::stock::Stock;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
 use crate::schema::stocks;
 
-/// Hard cap on `search` result size. Aligned with the typical picker UX (a
-/// dropdown showing 50 matches is more than any user will scroll through) and
-/// keeps a single client query from scanning the whole `stocks` table when the
-/// search term is unselective. The DTO-level `length(min = 2)` already filters
-/// out the most pathological queries.
+/// Defence-in-depth cap so a single unselective query cannot scan the table.
 const SEARCH_LIMIT: i64 = 50;
 
-/// Escape Postgres LIKE wildcards in user input so a query like `?q=%` or
-/// `?q=_` cannot widen the pattern to match every row. The default LIKE escape
-/// character in Postgres is `\`, which is escaped first to avoid double-
-/// escaping the backslashes added in the subsequent passes.
+/// Escape Postgres LIKE wildcards so `?q=%` or `?q=_` cannot widen the pattern.
+/// Backslash is escaped first because it is itself the LIKE escape character.
 fn escape_like_pattern(input: &str) -> String {
     input
         .replace('\\', "\\\\")
@@ -137,14 +131,12 @@ impl StockRepository for PgStockRepository {
     fn search(
         &self,
         query: String,
-    ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>> {
         Box::pin(async move {
             let pattern = format!("%{}%", escape_like_pattern(&query));
             self.db
                 .exec(move |conn| {
-                    // Probe with `LIMIT + 1` so we can tell the client whether
-                    // the result set was capped (truncated) without exposing
-                    // an unbounded scan if the search is unselective.
+                    // LIMIT+1 probe lets us detect truncation without a COUNT(*).
                     let mut rows = stocks::table
                         .filter(
                             stocks::symbol
@@ -160,11 +152,11 @@ impl StockRepository for PgStockRepository {
                     if truncated {
                         rows.truncate(SEARCH_LIMIT as usize);
                     }
-                    let stocks: Vec<Stock> = rows
+                    let items: Vec<Stock> = rows
                         .into_iter()
                         .map(Stock::try_from)
                         .collect::<Result<_, _>>()?;
-                    Ok((stocks, truncated))
+                    Ok(StockSearchResult { items, truncated })
                 })
                 .await
                 .map_err(AppError::from)

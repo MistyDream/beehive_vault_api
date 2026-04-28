@@ -143,7 +143,7 @@ mod tests {
 
     use crate::application::ports::price_fetcher::{FetchedPrice, PriceFetcher};
     use crate::application::ports::stock_price_repository::StockPriceRepository;
-    use crate::application::ports::stock_repository::StockRepository;
+    use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
     use crate::domain::market::price::Price;
     use crate::domain::market::stock::Stock;
 
@@ -193,8 +193,14 @@ mod tests {
         fn search(
             &self,
             _query: String,
-        ) -> Pin<Box<dyn Future<Output = Result<(Vec<Stock>, bool), AppError>> + Send + '_>> {
-            Box::pin(async move { Ok((Vec::new(), false)) })
+        ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>>
+        {
+            Box::pin(async move {
+                Ok(StockSearchResult {
+                    items: Vec::new(),
+                    truncated: false,
+                })
+            })
         }
 
         fn list_by_region(

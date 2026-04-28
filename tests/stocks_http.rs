@@ -1,7 +1,4 @@
 //! HTTP integration tests for the stock search endpoint.
-//!
-//! Exercises the Actix pipeline end-to-end with in-memory fakes so the test
-//! harness stays hermetic (no DB, no network).
 
 mod common;
 
@@ -9,35 +6,17 @@ use std::sync::Arc;
 
 use actix_web::http::StatusCode;
 use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
-use actix_web::{App, test, web};
-use garde_actix_web::web::QueryConfig;
+use actix_web::test;
 use serde_json::Value;
+
+use common::fakes::{InMemoryStockPriceRepo, InMemoryStockRepo, test_stock};
 
 const PROBLEM_JSON: &str = "application/problem+json";
 const X_RESULT_TRUNCATED: &str = "x-result-truncated";
 
-use beehive_vault_api::infrastructure::http::error::garde_error_handler;
-use beehive_vault_api::infrastructure::http::routes::configure_routes;
-
-use common::build_app_state;
-use common::fakes::{InMemoryStockPriceRepo, InMemoryStockRepo, test_stock};
-
-/// Mirrors the production app: the `QueryConfig` registration is what routes
-/// garde validation failures through `garde_error_handler` (→ 422 + RFC 9457
-/// problem+json), instead of garde-actix-web's default `ResponseError` (→ 400).
-/// Search tests never reach the price repository, so we wire a default fake.
-macro_rules! make_service {
-    ($stock_repo:expr $(,)?) => {{
-        let state =
-            build_app_state($stock_repo, Arc::new(InMemoryStockPriceRepo::default()));
-        test::init_service(
-            App::new()
-                .app_data(web::Data::new(state))
-                .app_data(QueryConfig::default().error_handler(garde_error_handler))
-                .service(web::scope("/v1").configure(configure_routes)),
-        )
-        .await
-    }};
+/// Tests never reach the price repository — wire a default fake.
+fn empty_price_repo() -> Arc<InMemoryStockPriceRepo> {
+    Arc::new(InMemoryStockPriceRepo::default())
 }
 
 // ============================ GET /v1/stocks?q= ==============================
@@ -49,7 +28,7 @@ async fn search_returns_200_with_matches_and_cache_headers() {
         test_stock(2, "MSFT", "USD"),
         test_stock(3, "GOOGL", "USD"),
     ];
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)));
+    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=AAPL")
@@ -70,10 +49,10 @@ async fn search_returns_200_with_matches_and_cache_headers() {
     let body: Value = test::read_body_json(resp).await;
     let arr = body.as_array().expect("response body must be a JSON array");
     assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], 1);
     assert_eq!(arr[0]["symbol"], "AAPL");
+    assert_eq!(arr[0]["name"], "Stock 1");
     assert_eq!(arr[0]["currency"], "USD");
-    assert!(arr[0]["id"].is_number());
-    assert!(arr[0]["name"].is_string());
     // Slim DTO must NOT include the dropped fields.
     assert!(arr[0].get("isin").is_none());
     assert!(arr[0].get("market").is_none());
@@ -83,9 +62,10 @@ async fn search_returns_200_with_matches_and_cache_headers() {
 
 #[actix_web::test]
 async fn search_returns_empty_array_when_no_match() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(vec![test_stock(
-        1, "AAPL", "USD"
-    )])));
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![test_stock(1, "AAPL", "USD")])),
+        empty_price_repo(),
+    );
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=ZZZ")
@@ -99,7 +79,7 @@ async fn search_returns_empty_array_when_no_match() {
 
 #[actix_web::test]
 async fn search_returns_400_when_q_is_missing() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::default()));
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
     let req = test::TestRequest::get().uri("/v1/stocks").to_request();
     let resp = test::call_service(&app, req).await;
@@ -126,7 +106,7 @@ async fn search_returns_400_when_q_is_missing() {
 
 #[actix_web::test]
 async fn search_returns_422_when_q_is_too_short() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::default()));
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
     let req = test::TestRequest::get().uri("/v1/stocks?q=a").to_request();
     let resp = test::call_service(&app, req).await;
@@ -142,7 +122,7 @@ async fn search_returns_422_when_q_is_too_short() {
 
 #[actix_web::test]
 async fn search_returns_422_when_q_is_too_long() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::default()));
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
     let long_q = "a".repeat(51);
     let uri = format!("/v1/stocks?q={long_q}");
@@ -154,7 +134,7 @@ async fn search_returns_422_when_q_is_too_long() {
 
 #[actix_web::test]
 async fn search_returns_400_when_q_is_whitespace_only() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::default()));
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
     // %20%20 = two spaces — passes garde length(min=2) but trim leaves 0 chars.
     let req = test::TestRequest::get()
@@ -174,9 +154,10 @@ async fn search_returns_400_when_q_is_whitespace_only() {
 
 #[actix_web::test]
 async fn search_is_case_insensitive() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(vec![test_stock(
-        1, "AAPL", "USD"
-    )])));
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![test_stock(1, "AAPL", "USD")])),
+        empty_price_repo(),
+    );
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=aapl")
@@ -194,7 +175,7 @@ async fn search_is_case_insensitive() {
 async fn search_matches_on_name() {
     // `test_stock` builds name = "Stock {id}".
     let stocks = vec![test_stock(1, "AAPL", "USD"), test_stock(2, "MSFT", "USD")];
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)));
+    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=Stock")
@@ -210,7 +191,7 @@ async fn search_matches_on_name() {
 async fn search_matches_on_isin() {
     // `test_stock` builds isin = "ISIN{id:04}".
     let stocks = vec![test_stock(42, "AAPL", "USD")];
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)));
+    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=ISIN0042")
@@ -226,9 +207,10 @@ async fn search_matches_on_isin() {
 
 #[actix_web::test]
 async fn search_returns_304_when_if_none_match_matches() {
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(vec![test_stock(
-        1, "AAPL", "USD"
-    )])));
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![test_stock(1, "AAPL", "USD")])),
+        empty_price_repo(),
+    );
 
     // First request: capture the ETag.
     let req = test::TestRequest::get()
@@ -260,7 +242,7 @@ async fn search_sets_x_result_truncated_when_cap_reached() {
     let stocks: Vec<_> = (1..=51)
         .map(|i| test_stock(i, &format!("S{i}"), "USD"))
         .collect();
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)));
+    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=Stock")
@@ -284,7 +266,7 @@ async fn search_omits_x_result_truncated_when_below_cap() {
     let stocks: Vec<_> = (1..=5)
         .map(|i| test_stock(i, &format!("S{i}"), "USD"))
         .collect();
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)));
+    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=Stock")
