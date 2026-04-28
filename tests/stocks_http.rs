@@ -133,23 +133,19 @@ async fn search_returns_422_when_q_is_too_long() {
 }
 
 #[actix_web::test]
-async fn search_returns_400_when_q_is_whitespace_only() {
+async fn search_returns_422_when_q_is_only_whitespace() {
     let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
-    // %20%20 = two spaces — passes garde length(min=2) but trim leaves 0 chars.
+    // %20%20 = two spaces — fails the trim-aware non_blank_min_2 validator.
     let req = test::TestRequest::get()
         .uri("/v1/stocks?q=%20%20")
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body: Value = test::read_body_json(resp).await;
-    assert!(
-        body["detail"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("non-whitespace characters")
-    );
+    assert_eq!(body["status"], 422);
+    assert!(body["errors"].is_array());
 }
 
 #[actix_web::test]

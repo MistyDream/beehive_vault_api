@@ -19,19 +19,12 @@ pub async fn search_stocks(
     query: Query<StockSearchQuery>,
     request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
-    let raw = query
+    let q = query
         .into_inner()
         .q
         .ok_or_else(|| AppError::BadRequest("query parameter 'q' is required".to_string()))?;
-    let q = raw.trim();
-    if q.len() < 2 {
-        return Err(AppError::BadRequest(
-            "query parameter 'q' must contain at least 2 non-whitespace characters".to_string(),
-        )
-        .into());
-    }
     let StockSearchResult { items, truncated } =
-        state.stock_service.search(q.to_string()).await?;
+        state.stock_service.search(q.trim().to_string()).await?;
     let response: Vec<StockResponse> = items.into_iter().map(StockResponse::from).collect();
     let mut http_response = respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)?;
     if truncated {
