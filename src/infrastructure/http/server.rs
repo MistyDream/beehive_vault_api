@@ -9,7 +9,7 @@ use tracing_actix_web::TracingLogger;
 
 use crate::config::settings;
 use crate::infrastructure::http::controllers::health_controller;
-use crate::infrastructure::http::error::garde_error_handler;
+use crate::infrastructure::http::error::{garde_error_handler, path_error_handler};
 use crate::infrastructure::http::middleware::auth::BearerAuth;
 use crate::infrastructure::http::request_context::REQUEST_PATH;
 use crate::infrastructure::http::routes::configure_routes;
@@ -57,6 +57,7 @@ pub async fn run(state: AppState) -> Result<()> {
                     .error_handler(garde_error_handler),
             )
             .app_data(QueryConfig::default().error_handler(garde_error_handler))
+            .app_data(web::PathConfig::default().error_handler(path_error_handler))
             .wrap_fn(|req, srv| {
                 let path = req.path().to_string();
                 REQUEST_PATH.scope(path, srv.call(req))

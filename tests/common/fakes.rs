@@ -25,6 +25,7 @@ use beehive_vault_api::application::ports::stock_repository::{
 };
 use beehive_vault_api::application::ports::transaction_repository::TransactionRepository;
 use beehive_vault_api::domain::market::enums::MarketRegion;
+use beehive_vault_api::domain::market::isin::Isin;
 use beehive_vault_api::domain::market::price::{NewPrice, Price};
 use beehive_vault_api::domain::market::stock::{NewStock, Stock, UpdateStock};
 use beehive_vault_api::domain::scoring::score_snapshot::ScoreSnapshot;
@@ -96,9 +97,17 @@ impl StockRepository for InMemoryStockRepo {
 
     fn find_by_isin(
         &self,
-        _isin: String,
+        isin: Isin,
     ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
-        Box::pin(async move { Err(AppError::NotFound) })
+        Box::pin(async move {
+            self.by_id
+                .lock()
+                .unwrap()
+                .values()
+                .find(|s| s.isin == isin)
+                .cloned()
+                .ok_or(AppError::NotFound)
+        })
     }
 
     fn search(
@@ -116,7 +125,7 @@ impl StockRepository for InMemoryStockRepo {
                 .filter(|s| {
                     s.symbol.to_lowercase().contains(&needle)
                         || s.name.to_lowercase().contains(&needle)
-                        || s.isin.to_lowercase().contains(&needle)
+                        || s.isin.as_str().to_lowercase().contains(&needle)
                 })
                 .cloned()
                 .collect();
@@ -473,12 +482,15 @@ impl HealthChecker for NotReadyHealthChecker {
 
 // ================================ Small builders =============================
 
+/// Build a deterministic test stock. The generated ISIN is ISO 6166-formatted
+/// (`US` + 10 zero-padded digits, last digit acts as the check digit) so it
+/// passes path-level format validation without bespoke fixtures.
 pub fn test_stock(id: i32, symbol: &str, currency: &str) -> Stock {
     Stock {
         id,
         symbol: symbol.to_string(),
         name: format!("Stock {id}"),
-        isin: format!("ISIN{id:04}"),
+        isin: Isin::try_new(&format!("US{id:010}")).unwrap(),
         currency: currency.to_string(),
         market_region: MarketRegion::Europe,
         market: None,

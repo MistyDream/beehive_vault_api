@@ -1,6 +1,7 @@
 use diesel::prelude::*;
 
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::Stock;
 use crate::infrastructure::persistence::error::DbError;
 use crate::schema::stocks;
@@ -43,7 +44,8 @@ impl TryFrom<StockRow> for Stock {
             id: row.id,
             symbol: row.symbol,
             name: row.name,
-            isin: row.isin,
+            isin: Isin::try_new(&row.isin)
+                .map_err(|e| DbError::Conversion(format!("invalid isin in DB: {e}")))?,
             currency: row.currency,
             market_region: MarketRegion::try_from(row.market_region.as_str())
                 .map_err(DbError::Conversion)?,

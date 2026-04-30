@@ -145,6 +145,7 @@ mod tests {
     use crate::application::ports::stock_price_repository::StockPriceRepository;
     use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
     use crate::domain::market::price::Price;
+    use crate::domain::market::isin::Isin;
     use crate::domain::market::stock::{NewStock, Stock, UpdateStock};
 
     // ---------- fakes ----------
@@ -185,7 +186,7 @@ mod tests {
 
         fn find_by_isin(
             &self,
-            _isin: String,
+            _isin: Isin,
         ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
             Box::pin(async move { Err(AppError::NotFound) })
         }
@@ -320,7 +321,7 @@ mod tests {
             id,
             symbol: symbol.to_string(),
             name: format!("Stock {id}"),
-            isin: format!("ISIN{id:04}"),
+            isin: Isin::try_new(&format!("US{id:010}")).unwrap(),
             currency: "EUR".to_string(),
             market_region: MarketRegion::Europe,
             market: None,

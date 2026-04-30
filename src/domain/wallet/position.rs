@@ -150,6 +150,7 @@ pub fn valorize_positions(positions: &mut [Position], prices_by_stock_id: &HashM
 mod tests {
     use super::*;
     use crate::domain::market::enums::MarketRegion;
+    use crate::domain::market::isin::Isin;
     use chrono::NaiveDate;
     use rust_decimal::Decimal;
     use std::str::FromStr;
@@ -159,7 +160,7 @@ mod tests {
             id,
             symbol: symbol.to_string(),
             name: format!("Stock {id}"),
-            isin: format!("ISIN{id:04}"),
+            isin: Isin::try_new(&format!("US{id:010}")).unwrap(),
             currency: "EUR".to_string(),
             market_region: MarketRegion::Europe,
             market: None,
