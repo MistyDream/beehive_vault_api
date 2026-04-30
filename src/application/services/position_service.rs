@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use chrono::NaiveDate;
+use uuid::Uuid;
 
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
@@ -62,7 +63,7 @@ impl PositionService {
         Self { portfolio_repo, transaction_repo, stock_repo, price_repo }
     }
 
-    pub async fn get_positions(&self, portfolio_id: i32) -> Result<Vec<Position>, AppError> {
+    pub async fn get_positions(&self, portfolio_id: Uuid) -> Result<Vec<Position>, AppError> {
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
             .await?;
@@ -84,7 +85,7 @@ impl PositionService {
 
     pub async fn get_positions_paginated(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         query: PositionsQuery,
     ) -> Result<Page<Position>, AppError> {
         let mut positions = self.get_positions(portfolio_id).await?;
@@ -109,7 +110,7 @@ impl PositionService {
         Ok(paginate_slice(positions, page, limit))
     }
 
-    pub async fn get_cash_balance(&self, portfolio_id: i32) -> Result<CashBalance, AppError> {
+    pub async fn get_cash_balance(&self, portfolio_id: Uuid) -> Result<CashBalance, AppError> {
         let portfolio = self.portfolio_repo.find_by_id(portfolio_id).await?;
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
@@ -117,7 +118,7 @@ impl PositionService {
         Ok(compute_cash_balance(&transactions, &portfolio.currency))
     }
 
-    pub async fn get_summary(&self, portfolio_id: i32) -> Result<PortfolioSummary, AppError> {
+    pub async fn get_summary(&self, portfolio_id: Uuid) -> Result<PortfolioSummary, AppError> {
         let portfolio = self.portfolio_repo.find_by_id(portfolio_id).await?;
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)
@@ -150,7 +151,7 @@ impl PositionService {
 
     pub async fn get_performance(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         from_date: Option<NaiveDate>,
         to_date: Option<NaiveDate>,
     ) -> Result<PerformanceReport, AppError> {

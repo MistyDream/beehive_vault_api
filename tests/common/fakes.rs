@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::sync::Mutex;
 
 use chrono::NaiveDate;
+use uuid::Uuid;
 
 use beehive_vault_api::application::error::AppError;
 use beehive_vault_api::application::ports::health_checker::HealthChecker;
@@ -319,7 +320,7 @@ pub struct NoOpPortfolioRepo;
 impl PortfolioRepository for NoOpPortfolioRepo {
     fn find_by_id(
         &self,
-        _id: i32,
+        _id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
     }
@@ -339,7 +340,7 @@ impl PortfolioRepository for NoOpPortfolioRepo {
 
     fn update(
         &self,
-        _id: i32,
+        _id: Uuid,
         _data: UpdatePortfolio,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
@@ -347,7 +348,7 @@ impl PortfolioRepository for NoOpPortfolioRepo {
 
     fn delete(
         &self,
-        _id: i32,
+        _id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(false) })
     }
@@ -358,29 +359,29 @@ pub struct NoOpTransactionRepo;
 impl TransactionRepository for NoOpTransactionRepo {
     fn find_by_id(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
     }
 
     fn list_by_portfolio(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
     }
 
     fn list_by_portfolio_chronological(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
     }
 
     fn list_by_portfolio_filtered(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
         _filters: TransactionFilter,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
@@ -395,8 +396,8 @@ impl TransactionRepository for NoOpTransactionRepo {
 
     fn update(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
         _data: UpdateTransaction,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
@@ -404,8 +405,8 @@ impl TransactionRepository for NoOpTransactionRepo {
 
     fn delete(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(false) })
     }

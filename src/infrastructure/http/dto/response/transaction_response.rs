@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::application::services::transaction_service::TransactionStats;
 use crate::domain::market::stock::Stock;
@@ -10,8 +11,8 @@ use crate::domain::wallet::transaction::Transaction;
 
 #[derive(Serialize)]
 pub struct TransactionResponse {
-    pub id: i64,
-    pub portfolio_id: i32,
+    pub id: Uuid,
+    pub portfolio_id: Uuid,
     pub stock: Option<Stock>,
     pub transaction_type: TransactionType,
     pub executed_at: NaiveDate,

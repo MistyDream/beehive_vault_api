@@ -1,5 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
+use uuid::Uuid;
 
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
@@ -9,8 +10,8 @@ use crate::schema::transactions;
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = transactions)]
 pub struct TransactionRow {
-    pub id: i64,
-    pub portfolio_id: i32,
+    pub id: Uuid,
+    pub portfolio_id: Uuid,
     pub stock_id: Option<i32>,
     pub transaction_type: String,
     pub executed_at: NaiveDate,
@@ -27,10 +28,12 @@ pub struct TransactionRow {
     pub created_at: NaiveDateTime,
 }
 
+/// `id` is generated app-side (`Uuid::now_v7()`) at insert time.
 #[derive(Insertable)]
 #[diesel(table_name = transactions)]
 pub struct NewTransactionRow<'a> {
-    pub portfolio_id: i32,
+    pub id: Uuid,
+    pub portfolio_id: Uuid,
     pub stock_id: Option<i32>,
     pub transaction_type: &'a str,
     pub executed_at: NaiveDate,

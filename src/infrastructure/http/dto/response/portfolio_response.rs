@@ -1,12 +1,13 @@
 use chrono::NaiveDateTime;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::domain::wallet::enums::PortfolioKind;
 use crate::domain::wallet::portfolio::Portfolio;
 
 #[derive(Serialize)]
 pub struct PortfolioResponse {
-    pub id: i32,
+    pub id: Uuid,
     pub name: String,
     pub kind: PortfolioKind,
     pub currency: String,

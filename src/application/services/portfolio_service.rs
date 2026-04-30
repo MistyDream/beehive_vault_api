@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::domain::wallet::portfolio::{NewPortfolio, Portfolio, UpdatePortfolio};
@@ -17,7 +19,7 @@ impl PortfolioService {
         self.repo.insert(new).await
     }
 
-    pub async fn get(&self, id: i32) -> Result<Portfolio, AppError> {
+    pub async fn get(&self, id: Uuid) -> Result<Portfolio, AppError> {
         self.repo.find_by_id(id).await
     }
 
@@ -25,11 +27,11 @@ impl PortfolioService {
         self.repo.list_all().await
     }
 
-    pub async fn update(&self, id: i32, data: UpdatePortfolio) -> Result<Portfolio, AppError> {
+    pub async fn update(&self, id: Uuid, data: UpdatePortfolio) -> Result<Portfolio, AppError> {
         self.repo.update(id, data).await
     }
 
-    pub async fn delete(&self, id: i32) -> Result<(), AppError> {
+    pub async fn delete(&self, id: Uuid) -> Result<(), AppError> {
         let deleted = self.repo.delete(id).await?;
         if deleted {
             Ok(())

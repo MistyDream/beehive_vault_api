@@ -1,5 +1,6 @@
 use actix_web::{HttpResponse, delete, get, post, put, web};
 use garde_actix_web::web::Json;
+use uuid::Uuid;
 
 use crate::domain::wallet::portfolio::NewPortfolio;
 use crate::infrastructure::http::dto::request::portfolio_request::{
@@ -34,7 +35,7 @@ pub async fn list_portfolios(
 #[get("/portfolios/{id}")]
 pub async fn get_portfolio(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio = state.portfolio_service.get(path.into_inner()).await?;
     Ok(HttpResponse::Ok().json(PortfolioResponse::from(portfolio)))
@@ -43,7 +44,7 @@ pub async fn get_portfolio(
 #[put("/portfolios/{id}")]
 pub async fn update_portfolio(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
     body: Json<UpdatePortfolioRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio = state.portfolio_service.update(path.into_inner(), body.into_inner().into()).await?;
@@ -53,7 +54,7 @@ pub async fn update_portfolio(
 #[delete("/portfolios/{id}")]
 pub async fn delete_portfolio(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
     state.portfolio_service.delete(path.into_inner()).await?;
     Ok(HttpResponse::NoContent().finish())

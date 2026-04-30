@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
@@ -26,7 +28,7 @@ impl PortfolioScoringService {
         Self { portfolio_repo, transaction_repo, stock_repo, score_repo }
     }
 
-    pub async fn get_scoring(&self, portfolio_id: i32) -> Result<PortfolioScoring, AppError> {
+    pub async fn get_scoring(&self, portfolio_id: Uuid) -> Result<PortfolioScoring, AppError> {
         let portfolio = self.portfolio_repo.find_by_id(portfolio_id).await?;
         let transactions = self.transaction_repo
             .list_by_portfolio_chronological(portfolio_id)

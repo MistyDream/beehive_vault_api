@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
 use crate::application::ports::stock_repository::StockRepository;
@@ -67,7 +69,7 @@ impl TransactionService {
 
     pub async fn create(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         new: NewTransaction,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         self.portfolio_repo.find_by_id(portfolio_id).await?;
@@ -79,8 +81,8 @@ impl TransactionService {
 
     pub async fn get(
         &self,
-        portfolio_id: i32,
-        tx_id: i64,
+        portfolio_id: Uuid,
+        tx_id: Uuid,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         let transaction = self.transaction_repo.find_by_id(portfolio_id, tx_id).await?;
         let stocks = fetch_stock_by_id_optional(&self.stock_repo, transaction.stock_id).await?;
@@ -89,7 +91,7 @@ impl TransactionService {
 
     pub async fn list_paginated(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         query: TransactionsQuery,
     ) -> Result<(Page<Transaction>, HashMap<i32, Stock>), AppError> {
         let has_filters = !query.filters.transaction_types.is_empty()
@@ -134,7 +136,7 @@ impl TransactionService {
 
     pub async fn stats(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         stock_id: Option<i32>,
         from_date: Option<chrono::NaiveDate>,
         to_date: Option<chrono::NaiveDate>,
@@ -174,8 +176,8 @@ impl TransactionService {
 
     pub async fn update(
         &self,
-        portfolio_id: i32,
-        tx_id: i64,
+        portfolio_id: Uuid,
+        tx_id: Uuid,
         data: UpdateTransaction,
     ) -> Result<(Transaction, HashMap<i32, Stock>), AppError> {
         data.check_invariants().map_err(AppError::BadRequest)?;
@@ -184,7 +186,7 @@ impl TransactionService {
         Ok((transaction, stocks))
     }
 
-    pub async fn delete(&self, portfolio_id: i32, tx_id: i64) -> Result<(), AppError> {
+    pub async fn delete(&self, portfolio_id: Uuid, tx_id: Uuid) -> Result<(), AppError> {
         let deleted = self.transaction_repo.delete(portfolio_id, tx_id).await?;
         if deleted {
             Ok(())

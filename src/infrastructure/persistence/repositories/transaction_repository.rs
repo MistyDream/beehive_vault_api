@@ -7,6 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use diesel::prelude::*;
+use uuid::Uuid;
 
 use crate::application::error::AppError;
 use crate::application::ports::transaction_repository::TransactionRepository;
@@ -31,8 +32,8 @@ impl PgTransactionRepository {
 impl TransactionRepository for PgTransactionRepository {
     fn find_by_id(
         &self,
-        portfolio_id: i32,
-        tx_id: i64,
+        portfolio_id: Uuid,
+        tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db
@@ -51,7 +52,7 @@ impl TransactionRepository for PgTransactionRepository {
 
     fn list_by_portfolio(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db
@@ -70,7 +71,7 @@ impl TransactionRepository for PgTransactionRepository {
 
     fn list_by_portfolio_chronological(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db
@@ -89,7 +90,7 @@ impl TransactionRepository for PgTransactionRepository {
 
     fn list_by_portfolio_filtered(
         &self,
-        portfolio_id: i32,
+        portfolio_id: Uuid,
         filters: TransactionFilter,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move {
@@ -136,6 +137,7 @@ impl TransactionRepository for PgTransactionRepository {
             self.db
                 .exec(move |conn| {
                     let row_data = NewTransactionRow {
+                        id: Uuid::now_v7(),
                         portfolio_id: new.portfolio_id,
                         stock_id: new.stock_id,
                         transaction_type: new.transaction_type.as_str(),
@@ -164,8 +166,8 @@ impl TransactionRepository for PgTransactionRepository {
 
     fn update(
         &self,
-        portfolio_id: i32,
-        tx_id: i64,
+        portfolio_id: Uuid,
+        tx_id: Uuid,
         data: UpdateTransaction,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move {
@@ -202,8 +204,8 @@ impl TransactionRepository for PgTransactionRepository {
 
     fn delete(
         &self,
-        portfolio_id: i32,
-        tx_id: i64,
+        portfolio_id: Uuid,
+        tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db

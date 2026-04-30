@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
+use uuid::Uuid;
 
 use crate::domain::wallet::enums::PortfolioKind;
 use crate::domain::wallet::portfolio::Portfolio;
@@ -9,7 +10,7 @@ use crate::schema::portfolios;
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = portfolios)]
 pub struct PortfolioRow {
-    pub id: i32,
+    pub id: Uuid,
     pub name: String,
     pub kind: String,
     pub currency: String,
@@ -18,9 +19,13 @@ pub struct PortfolioRow {
     pub updated_at: NaiveDateTime,
 }
 
+/// `id` is generated app-side (`Uuid::now_v7()`) at insert time so the row
+/// carries a sortable timestamp prefix that helps B-tree locality. The DB has
+/// a `gen_random_uuid()` default as a fallback for partial inserts.
 #[derive(Insertable)]
 #[diesel(table_name = portfolios)]
 pub struct NewPortfolioRow<'a> {
+    pub id: Uuid,
     pub name: &'a str,
     pub kind: &'a str,
     pub currency: &'a str,
