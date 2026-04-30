@@ -1,4 +1,4 @@
-//! HTTP integration tests for the stock search endpoint.
+//! HTTP integration tests for the stock CRUD + search endpoints.
 
 mod common;
 
@@ -7,6 +7,8 @@ use std::sync::Arc;
 use actix_web::http::StatusCode;
 use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH, LOCATION};
 use actix_web::test;
+use beehive_vault_api::domain::market::enums::MarketRegion;
+use beehive_vault_api::domain::market::stock::Stock;
 use serde_json::{Value, json};
 
 use common::fakes::{InMemoryStockPriceRepo, InMemoryStockRepo, test_stock};
@@ -458,6 +460,52 @@ async fn create_stock_returns_409_when_symbol_already_exists() {
 }
 
 #[actix_web::test]
+async fn create_stock_returns_415_when_content_type_is_not_json() {
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
+
+    let req = test::TestRequest::post()
+        .uri("/v1/stocks")
+        .insert_header((CONTENT_TYPE, "text/plain"))
+        .set_payload(serde_json::to_string(&valid_create_body()).unwrap())
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
+
+#[actix_web::test]
+async fn create_stock_returns_422_when_symbol_is_too_long() {
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
+
+    let mut body = valid_create_body();
+    body["symbol"] = json!("A".repeat(21)); // garde max=20
+    let req = test::TestRequest::post()
+        .uri("/v1/stocks")
+        .set_json(body)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[actix_web::test]
+async fn create_stock_returns_422_when_optional_field_is_empty_string() {
+    // Inner gardes on `sector` enforce min=1 — explicit "" must fail validation
+    // rather than slip through and produce a meaningless empty-string in the DB.
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
+
+    let mut body = valid_create_body();
+    body["sector"] = json!("");
+    let req = test::TestRequest::post()
+        .uri("/v1/stocks")
+        .set_json(body)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[actix_web::test]
 async fn create_stock_returns_409_when_isin_already_exists() {
     // Existing stock has the same ISIN our payload uses: "ISIN{id:04}" with id=88160 →
     // doesn't match "US88160R1014", so seed one that does.
@@ -482,21 +530,44 @@ async fn create_stock_returns_409_when_isin_already_exists() {
 // ============================ PATCH /v1/stocks/{id} ==========================
 
 #[actix_web::test]
-async fn patch_stock_applies_partial_update() {
-    let stocks = vec![test_stock(7, "AAPL", "USD")];
-    let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
+async fn patch_stock_applies_partial_update_and_leaves_other_fields_untouched() {
+    // Seed a fully-populated stock so the assertion can prove every untouched
+    // field is preserved across the merge — not just `symbol`.
+    let stock = Stock {
+        id: 7,
+        symbol: "AAPL".to_string(),
+        name: "Apple Inc.".to_string(),
+        isin: "US0378331005".to_string(),
+        currency: "USD".to_string(),
+        market_region: MarketRegion::Americas,
+        market: Some("NASDAQ".to_string()),
+        sector: Some("Technology".to_string()),
+        industry: Some("Consumer Electronics".to_string()),
+        country: Some("US".to_string()),
+    };
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![stock])),
+        empty_price_repo(),
+    );
 
     let req = test::TestRequest::patch()
         .uri("/v1/stocks/7")
-        .set_json(json!({ "sector": "Technology" }))
+        .set_json(json!({ "sector": "Software" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
     let body: Value = test::read_body_json(resp).await;
     assert_eq!(body["id"], 7);
-    assert_eq!(body["symbol"], "AAPL", "symbol must stay unchanged");
-    assert_eq!(body["sector"], "Technology");
+    assert_eq!(body["symbol"], "AAPL");
+    assert_eq!(body["name"], "Apple Inc.");
+    assert_eq!(body["isin"], "US0378331005");
+    assert_eq!(body["currency"], "USD");
+    assert_eq!(body["market_region"], "americas");
+    assert_eq!(body["market"], "NASDAQ");
+    assert_eq!(body["sector"], "Software");
+    assert_eq!(body["industry"], "Consumer Electronics");
+    assert_eq!(body["country"], "US");
 }
 
 #[actix_web::test]
@@ -524,6 +595,33 @@ async fn patch_stock_returns_422_when_isin_format_invalid() {
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[actix_web::test]
+async fn patch_stock_returns_409_when_isin_collides_with_other() {
+    // Two stocks with valid ISO 6166 ISINs — patch stock 2 with stock 1's ISIN
+    // and expect a 409 from the UNIQUE-constraint mapping.
+    let mut s1 = test_stock(1, "AAPL", "USD");
+    s1.isin = "US0378331005".to_string();
+    let mut s2 = test_stock(2, "MSFT", "USD");
+    s2.isin = "US5949181045".to_string();
+    let app = make_service!(
+        Arc::new(InMemoryStockRepo::new(vec![s1, s2])),
+        empty_price_repo(),
+    );
+
+    let req = test::TestRequest::patch()
+        .uri("/v1/stocks/2")
+        .set_json(json!({ "isin": "US0378331005" }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
+    let body: Value = test::read_body_json(resp).await;
+    assert!(
+        body["detail"].as_str().unwrap_or_default().contains("isin"),
+        "conflict detail should identify the colliding field"
+    );
 }
 
 #[actix_web::test]
