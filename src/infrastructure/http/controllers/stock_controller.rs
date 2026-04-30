@@ -1,14 +1,19 @@
 use actix_web::http::header::{HeaderName, HeaderValue};
-use actix_web::{HttpRequest, HttpResponse, get, web};
-use garde_actix_web::web::Query;
+use actix_web::{HttpRequest, HttpResponse, delete, get, patch, post, web};
+use garde_actix_web::web::{Json, Query};
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockSearchResult;
+use crate::domain::market::stock::NewStock;
 use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
-use crate::infrastructure::http::dto::request::stock_request::StockSearchQuery;
-use crate::infrastructure::http::dto::response::stock_response::StockResponse;
+use crate::infrastructure::http::dto::request::stock_request::{
+    CreateStockRequest, StockSearchQuery, UpdateStockRequest,
+};
+use crate::infrastructure::http::dto::response::stock_response::{
+    StockDetailResponse, StockResponse,
+};
 use crate::infrastructure::http::error::ApiError;
-use crate::infrastructure::http::etag::respond_with_etag_qualified;
+use crate::infrastructure::http::etag::{respond_with_etag, respond_with_etag_qualified};
 use crate::infrastructure::http::state::AppState;
 
 const X_RESULT_TRUNCATED: HeaderName = HeaderName::from_static("x-result-truncated");
@@ -38,4 +43,50 @@ pub async fn search_stocks(
             .insert(X_RESULT_TRUNCATED, HeaderValue::from_static("true"));
     }
     Ok(http_response)
+}
+
+#[get("/stocks/{id}")]
+pub async fn get_stock(
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+    request: HttpRequest,
+) -> Result<HttpResponse, ApiError> {
+    let stock = state.stock_service.get_by_id(path.into_inner()).await?;
+    let response = StockDetailResponse::from(stock);
+    Ok(respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)?)
+}
+
+#[post("/stocks")]
+pub async fn create_stock(
+    state: web::Data<AppState>,
+    body: Json<CreateStockRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let new = NewStock::from(body.into_inner());
+    let stock = state.stock_service.create(new).await?;
+    let location = format!("/v1/stocks/{}", stock.id);
+    Ok(HttpResponse::Created()
+        .insert_header(("Location", location))
+        .json(StockDetailResponse::from(stock)))
+}
+
+#[patch("/stocks/{id}")]
+pub async fn update_stock(
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+    body: Json<UpdateStockRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let stock = state
+        .stock_service
+        .update(path.into_inner(), body.into_inner().into())
+        .await?;
+    Ok(HttpResponse::Ok().json(StockDetailResponse::from(stock)))
+}
+
+#[delete("/stocks/{id}")]
+pub async fn delete_stock(
+    state: web::Data<AppState>,
+    path: web::Path<i32>,
+) -> Result<HttpResponse, ApiError> {
+    state.stock_service.delete(path.into_inner()).await?;
+    Ok(HttpResponse::NoContent().finish())
 }

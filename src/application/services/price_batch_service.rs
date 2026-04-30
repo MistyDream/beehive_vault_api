@@ -145,7 +145,7 @@ mod tests {
     use crate::application::ports::stock_price_repository::StockPriceRepository;
     use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
     use crate::domain::market::price::Price;
-    use crate::domain::market::stock::Stock;
+    use crate::domain::market::stock::{NewStock, Stock, UpdateStock};
 
     // ---------- fakes ----------
 
@@ -213,6 +213,21 @@ mod tests {
                 .cloned()
                 .unwrap_or_default();
             Box::pin(async move { Ok(stocks) })
+        }
+
+        fn insert(
+            &self,
+            _new: NewStock,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn update(
+            &self,
+            _stock_id: i32,
+            _data: UpdateStock,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
         }
 
         fn delete(

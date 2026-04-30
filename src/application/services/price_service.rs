@@ -79,6 +79,7 @@ mod tests {
 
     use crate::application::ports::stock_repository::StockSearchResult;
     use crate::domain::market::enums::MarketRegion;
+    use crate::domain::market::stock::{NewStock, UpdateStock};
 
     // ---------- minimal fakes for the two ports the service depends on ----------
 
@@ -163,6 +164,21 @@ mod tests {
             _region: MarketRegion,
         ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
             Box::pin(async move { Ok(Vec::new()) })
+        }
+
+        fn insert(
+            &self,
+            _new: NewStock,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
+        }
+
+        fn update(
+            &self,
+            _stock_id: i32,
+            _data: UpdateStock,
+        ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+            Box::pin(async move { Err(AppError::NotFound) })
         }
 
         fn delete(
