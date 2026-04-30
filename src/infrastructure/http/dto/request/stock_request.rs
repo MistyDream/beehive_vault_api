@@ -22,10 +22,8 @@ fn non_blank_min_2(value: &String, _: &()) -> garde::Result {
     Ok(())
 }
 
-// Patterns inlined into `garde(pattern(...))` directly — the macro needs a
-// literal: ISIN (ISO 6166: 2-letter country, 9 alphanumerics, 1 check digit
-// — format only, check digit not verified), currency (ISO 4217), country (ISO
-// 3166-1 alpha-2).
+// Patterns inlined because `garde(pattern(...))` requires a literal. ISIN
+// check digit is intentionally not verified — format-only check.
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct CreateStockRequest {

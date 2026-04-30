@@ -25,9 +25,9 @@ impl StockService {
         self.repo.insert(new).await
     }
 
-    /// Apply a partial update by fetching the current stock, merging the patch,
-    /// and writing the merged value back as a full replace at the repo layer.
-    /// Last-write-wins on concurrent edits — acceptable for an admin CRUD.
+    /// Last-write-wins on concurrent edits: a parallel writer's changes can be
+    /// silently overwritten by the fetch-merge-write below. Acceptable for an
+    /// admin CRUD; revisit if multi-user editing arrives.
     pub async fn update(&self, stock_id: i32, patch: StockPatch) -> Result<Stock, AppError> {
         let current = self.repo.find_by_id(stock_id).await?;
         let merged = UpdateStock {

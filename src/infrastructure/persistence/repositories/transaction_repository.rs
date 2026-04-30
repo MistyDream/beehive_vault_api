@@ -220,5 +220,4 @@ impl TransactionRepository for PgTransactionRepository {
                 .map_err(AppError::from)
         })
     }
-
 }
