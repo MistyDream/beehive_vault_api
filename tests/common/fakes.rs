@@ -25,7 +25,7 @@ use beehive_vault_api::application::ports::stock_repository::{
 use beehive_vault_api::application::ports::transaction_repository::TransactionRepository;
 use beehive_vault_api::domain::market::enums::MarketRegion;
 use beehive_vault_api::domain::market::price::{NewPrice, Price};
-use beehive_vault_api::domain::market::stock::Stock;
+use beehive_vault_api::domain::market::stock::{NewStock, Stock, UpdateStock};
 use beehive_vault_api::domain::scoring::score_snapshot::ScoreSnapshot;
 use beehive_vault_api::domain::wallet::portfolio::{NewPortfolio, Portfolio, UpdatePortfolio};
 use beehive_vault_api::domain::wallet::transaction::{
@@ -37,12 +37,24 @@ use beehive_vault_api::domain::wallet::transaction::{
 #[derive(Default)]
 pub struct InMemoryStockRepo {
     by_id: Mutex<HashMap<i32, Stock>>,
+    /// Stock ids whose `delete` will surface a `Conflict` instead of removing
+    /// the row — mirrors what `PgStockRepository::delete` does when the
+    /// `transactions_stock_id_fkey` ON DELETE RESTRICT FK fires.
+    fk_protected: std::collections::HashSet<i32>,
 }
 
 impl InMemoryStockRepo {
     pub fn new(stocks: Vec<Stock>) -> Self {
         let map = stocks.into_iter().map(|s| (s.id, s)).collect();
-        Self { by_id: Mutex::new(map) }
+        Self { by_id: Mutex::new(map), fk_protected: Default::default() }
+    }
+
+    pub fn with_fk_protected(stocks: Vec<Stock>, protected_ids: &[i32]) -> Self {
+        let map = stocks.into_iter().map(|s| (s.id, s)).collect();
+        Self {
+            by_id: Mutex::new(map),
+            fk_protected: protected_ids.iter().copied().collect(),
+        }
     }
 }
 
@@ -134,11 +146,86 @@ impl StockRepository for InMemoryStockRepo {
         })
     }
 
+    fn insert(
+        &self,
+        new: NewStock,
+    ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            let mut by_id = self.by_id.lock().unwrap();
+            if by_id.values().any(|s| s.symbol == new.symbol) {
+                return Err(AppError::Conflict("symbol already exists".to_string()));
+            }
+            if by_id.values().any(|s| s.isin == new.isin) {
+                return Err(AppError::Conflict("isin already exists".to_string()));
+            }
+            let next_id = by_id.keys().max().copied().unwrap_or(0) + 1;
+            let stock = Stock {
+                id: next_id,
+                symbol: new.symbol,
+                name: new.name,
+                isin: new.isin,
+                currency: new.currency,
+                market_region: new.market_region,
+                market: new.market,
+                sector: new.sector,
+                industry: new.industry,
+                country: new.country,
+            };
+            by_id.insert(next_id, stock.clone());
+            Ok(stock)
+        })
+    }
+
+    fn update(
+        &self,
+        stock_id: i32,
+        data: UpdateStock,
+    ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
+        Box::pin(async move {
+            let mut by_id = self.by_id.lock().unwrap();
+            if !by_id.contains_key(&stock_id) {
+                return Err(AppError::NotFound);
+            }
+            if by_id
+                .iter()
+                .any(|(id, s)| *id != stock_id && s.symbol == data.symbol)
+            {
+                return Err(AppError::Conflict("symbol already exists".to_string()));
+            }
+            if by_id
+                .iter()
+                .any(|(id, s)| *id != stock_id && s.isin == data.isin)
+            {
+                return Err(AppError::Conflict("isin already exists".to_string()));
+            }
+            let stock = Stock {
+                id: stock_id,
+                symbol: data.symbol,
+                name: data.name,
+                isin: data.isin,
+                currency: data.currency,
+                market_region: data.market_region,
+                market: data.market,
+                sector: data.sector,
+                industry: data.industry,
+                country: data.country,
+            };
+            by_id.insert(stock_id, stock.clone());
+            Ok(stock)
+        })
+    }
+
     fn delete(
         &self,
         stock_id: i32,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
+        let blocked = self.fk_protected.contains(&stock_id);
         Box::pin(async move {
+            if blocked {
+                return Err(AppError::Conflict(
+                    "stock is referenced by transactions and cannot be deleted".to_string(),
+                ));
+            }
             Ok(self.by_id.lock().unwrap().remove(&stock_id).is_some())
         })
     }

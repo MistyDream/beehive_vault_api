@@ -1,7 +1,10 @@
 use serde::Serialize;
 
+use crate::domain::market::enums::MarketRegion;
 use crate::domain::market::stock::Stock;
 
+/// Slim DTO returned by `GET /v1/stocks?q=` — minimal payload tuned for the
+/// frontend stock picker.
 #[derive(Serialize)]
 pub struct StockResponse {
     pub id: i32,
@@ -17,6 +20,40 @@ impl From<Stock> for StockResponse {
             symbol: s.symbol,
             name: s.name,
             currency: s.currency,
+        }
+    }
+}
+
+/// Full DTO returned by `GET /v1/stocks/{id}`, `POST /v1/stocks`, and
+/// `PATCH /v1/stocks/{id}` — exposes every persisted field, in contrast to
+/// the slim `StockResponse` used by the search endpoint.
+#[derive(Serialize)]
+pub struct StockDetailResponse {
+    pub id: i32,
+    pub symbol: String,
+    pub name: String,
+    pub isin: String,
+    pub currency: String,
+    pub market_region: MarketRegion,
+    pub market: Option<String>,
+    pub sector: Option<String>,
+    pub industry: Option<String>,
+    pub country: Option<String>,
+}
+
+impl From<Stock> for StockDetailResponse {
+    fn from(s: Stock) -> Self {
+        StockDetailResponse {
+            id: s.id,
+            symbol: s.symbol,
+            name: s.name,
+            isin: s.isin,
+            currency: s.currency,
+            market_region: s.market_region,
+            market: s.market,
+            sector: s.sector,
+            industry: s.industry,
+            country: s.country,
         }
     }
 }
