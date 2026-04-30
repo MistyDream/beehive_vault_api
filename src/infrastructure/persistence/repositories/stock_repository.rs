@@ -37,6 +37,15 @@ fn map_constraint_violation(err: DbError) -> AppError {
                     "stock is referenced by transactions and cannot be deleted".to_string(),
                 );
             }
+            // Surface unmapped integrity violations in logs so a future renamed
+            // or newly-added constraint doesn't degrade silently to a 500.
+            (DatabaseErrorKind::UniqueViolation | DatabaseErrorKind::ForeignKeyViolation, name) => {
+                tracing::warn!(
+                    constraint = ?name,
+                    kind = ?kind,
+                    "unmapped DB integrity violation on stocks — surfacing as 500"
+                );
+            }
             _ => {}
         }
     }
