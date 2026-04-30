@@ -19,7 +19,9 @@ use beehive_vault_api::application::ports::health_checker::HealthChecker;
 use beehive_vault_api::application::ports::portfolio_repository::PortfolioRepository;
 use beehive_vault_api::application::ports::score_snapshot_repository::ScoreSnapshotRepository;
 use beehive_vault_api::application::ports::stock_price_repository::StockPriceRepository;
-use beehive_vault_api::application::ports::stock_repository::StockRepository;
+use beehive_vault_api::application::ports::stock_repository::{
+    StockRepository, StockSearchResult,
+};
 use beehive_vault_api::application::ports::transaction_repository::TransactionRepository;
 use beehive_vault_api::domain::market::enums::MarketRegion;
 use beehive_vault_api::domain::market::price::{NewPrice, Price};
@@ -86,11 +88,33 @@ impl StockRepository for InMemoryStockRepo {
         Box::pin(async move { Err(AppError::NotFound) })
     }
 
-    fn list_all(
+    fn search(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+        query: String,
+    ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>> {
         Box::pin(async move {
-            Ok(self.by_id.lock().unwrap().values().cloned().collect())
+            const FAKE_SEARCH_LIMIT: usize = 50;
+            let needle = query.to_lowercase();
+            let mut items: Vec<Stock> = self
+                .by_id
+                .lock()
+                .unwrap()
+                .values()
+                .filter(|s| {
+                    s.symbol.to_lowercase().contains(&needle)
+                        || s.name.to_lowercase().contains(&needle)
+                        || s.isin.to_lowercase().contains(&needle)
+                })
+                .cloned()
+                .collect();
+            // Mirror the prod adapter's `ORDER BY symbol ASC` so the cap evicts
+            // the same items in tests as it would in production.
+            items.sort_by(|a, b| a.symbol.cmp(&b.symbol));
+            let truncated = items.len() > FAKE_SEARCH_LIMIT;
+            if truncated {
+                items.truncate(FAKE_SEARCH_LIMIT);
+            }
+            Ok(StockSearchResult { items, truncated })
         })
     }
 

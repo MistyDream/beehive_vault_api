@@ -1,41 +1,21 @@
 //! HTTP integration tests for the stock price endpoints.
-//!
-//! Exercises the Actix pipeline end-to-end with in-memory fakes so the test
-//! harness stays hermetic (no DB, no network).
 
 mod common;
 
 use std::sync::Arc;
 
-use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
 use actix_web::http::StatusCode;
-use actix_web::{test, web, App};
+use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
+use actix_web::test;
 use chrono::NaiveDate;
 use serde_json::Value;
 
+use common::fakes::{InMemoryStockPriceRepo, InMemoryStockRepo, test_price, test_stock};
+
 const PROBLEM_JSON: &str = "application/problem+json";
-
-use beehive_vault_api::infrastructure::http::routes::configure_routes;
-
-use common::fakes::{test_price, test_stock, InMemoryStockPriceRepo, InMemoryStockRepo};
-use common::build_app_state;
 
 fn date(y: i32, m: u32, d: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, d).unwrap()
-}
-
-/// Macro so each test gets its own inferred Service type (avoids having to
-/// spell out the full actix `Service` signature in a helper fn).
-macro_rules! make_service {
-    ($stock_repo:expr, $price_repo:expr $(,)?) => {{
-        let state = build_app_state($stock_repo, $price_repo);
-        test::init_service(
-            App::new()
-                .app_data(web::Data::new(state))
-                .service(web::scope("/v1").configure(configure_routes)),
-        )
-        .await
-    }};
 }
 
 // ======================= GET /v1/stocks/{stock_id}/price =====================

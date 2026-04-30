@@ -4,6 +4,30 @@
 
 pub mod fakes;
 
+/// Builds an actix test service mirroring the production app: bearer auth is
+/// dropped (the `/v1` scope is mounted bare) but the `QueryConfig` error
+/// handler is registered so garde validation failures surface as 422 +
+/// problem+json instead of garde-actix-web's default 400.
+#[macro_export]
+macro_rules! make_service {
+    ($stock_repo:expr, $price_repo:expr $(,)?) => {{
+        let state = $crate::common::build_app_state($stock_repo, $price_repo);
+        ::actix_web::test::init_service(
+            ::actix_web::App::new()
+                .app_data(::actix_web::web::Data::new(state))
+                .app_data(
+                    ::garde_actix_web::web::QueryConfig::default().error_handler(
+                        ::beehive_vault_api::infrastructure::http::error::garde_error_handler,
+                    ),
+                )
+                .service(::actix_web::web::scope("/v1").configure(
+                    ::beehive_vault_api::infrastructure::http::routes::configure_routes,
+                )),
+        )
+        .await
+    }};
+}
+
 use std::sync::Arc;
 
 use beehive_vault_api::application::ports::stock_price_repository::StockPriceRepository;
@@ -12,6 +36,7 @@ use beehive_vault_api::application::services::portfolio_scoring_service::Portfol
 use beehive_vault_api::application::services::portfolio_service::PortfolioService;
 use beehive_vault_api::application::services::position_service::PositionService;
 use beehive_vault_api::application::services::price_service::PriceService;
+use beehive_vault_api::application::services::stock_service::StockService;
 use beehive_vault_api::application::services::transaction_service::TransactionService;
 use beehive_vault_api::infrastructure::http::state::AppState;
 
@@ -48,7 +73,8 @@ pub fn build_app_state(
         stock_repo.clone(),
         score_repo,
     ));
-    let price_service = Arc::new(PriceService::new(stock_repo, stock_price_repo));
+    let price_service = Arc::new(PriceService::new(stock_repo.clone(), stock_price_repo));
+    let stock_service = Arc::new(StockService::new(stock_repo));
     let health_checker = Arc::new(AlwaysReadyHealthChecker);
 
     AppState {
@@ -57,6 +83,7 @@ pub fn build_app_state(
         position_service,
         portfolio_scoring_service,
         price_service,
+        stock_service,
         health_checker,
     }
 }

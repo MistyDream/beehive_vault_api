@@ -5,4 +5,5 @@ pub mod position_service;
 pub mod price_batch_service;
 pub mod price_service;
 pub mod stock_lookup;
+pub mod stock_service;
 pub mod transaction_service;

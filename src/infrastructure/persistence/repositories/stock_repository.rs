@@ -8,12 +8,24 @@ use std::pin::Pin;
 use diesel::prelude::*;
 
 use crate::application::error::AppError;
-use crate::application::ports::stock_repository::StockRepository;
+use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
 use crate::domain::market::enums::MarketRegion;
 use crate::domain::market::stock::Stock;
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::models::stock::{NewStockRow, StockRow};
 use crate::schema::stocks;
+
+/// Defence-in-depth cap so a single unselective query cannot scan the table.
+const SEARCH_LIMIT: i64 = 50;
+
+/// Escape Postgres LIKE wildcards so `?q=%` or `?q=_` cannot widen the pattern.
+/// Backslash is escaped first because it is itself the LIKE escape character.
+fn escape_like_pattern(input: &str) -> String {
+    input
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
 
 #[derive(Clone)]
 pub struct PgStockRepository {
@@ -116,17 +128,35 @@ impl StockRepository for PgStockRepository {
         })
     }
 
-    fn list_all(
+    fn search(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Stock>, AppError>> + Send + '_>> {
+        query: String,
+    ) -> Pin<Box<dyn Future<Output = Result<StockSearchResult, AppError>> + Send + '_>> {
         Box::pin(async move {
+            let pattern = format!("%{}%", escape_like_pattern(&query));
             self.db
                 .exec(move |conn| {
-                    let rows = stocks::table
+                    // LIMIT+1 probe lets us detect truncation without a COUNT(*).
+                    let mut rows = stocks::table
+                        .filter(
+                            stocks::symbol
+                                .ilike(&pattern)
+                                .or(stocks::name.ilike(&pattern))
+                                .or(stocks::isin.ilike(&pattern)),
+                        )
                         .select(StockRow::as_select())
                         .order(stocks::symbol.asc())
-                        .load(conn)?;
-                    rows.into_iter().map(Stock::try_from).collect()
+                        .limit(SEARCH_LIMIT + 1)
+                        .load::<StockRow>(conn)?;
+                    let truncated = rows.len() as i64 > SEARCH_LIMIT;
+                    if truncated {
+                        rows.truncate(SEARCH_LIMIT as usize);
+                    }
+                    let items: Vec<Stock> = rows
+                        .into_iter()
+                        .map(Stock::try_from)
+                        .collect::<Result<_, _>>()?;
+                    Ok(StockSearchResult { items, truncated })
                 })
                 .await
                 .map_err(AppError::from)
@@ -167,5 +197,31 @@ impl StockRepository for PgStockRepository {
                 .await
                 .map_err(AppError::from)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_like_pattern;
+
+    #[test]
+    fn escape_doubles_backslash_first_so_added_backslashes_are_not_re_escaped() {
+        assert_eq!(escape_like_pattern("a\\b"), "a\\\\b");
+    }
+
+    #[test]
+    fn escape_neutralises_percent_and_underscore_wildcards() {
+        assert_eq!(escape_like_pattern("50%"), "50\\%");
+        assert_eq!(escape_like_pattern("a_b"), "a\\_b");
+    }
+
+    #[test]
+    fn escape_handles_combined_metacharacters() {
+        assert_eq!(escape_like_pattern("100%_off\\"), "100\\%\\_off\\\\");
+    }
+
+    #[test]
+    fn escape_passes_through_normal_characters() {
+        assert_eq!(escape_like_pattern("AAPL"), "AAPL");
     }
 }
