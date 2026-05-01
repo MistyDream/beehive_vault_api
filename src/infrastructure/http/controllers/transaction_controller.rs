@@ -1,5 +1,6 @@
 use actix_web::{HttpRequest, HttpResponse, delete, get, post, put, web};
 use garde_actix_web::web::{Json, Query};
+use uuid::Uuid;
 
 use crate::application::error::AppError;
 use crate::application::services::pagination::SortDirection;
@@ -22,7 +23,7 @@ use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 #[post("/portfolios/{portfolio_id}/transactions")]
 pub async fn create_transaction(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
     body: Json<CreateTransactionRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
@@ -37,7 +38,7 @@ pub async fn create_transaction(
 #[get("/portfolios/{portfolio_id}/transactions")]
 pub async fn list_transactions(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
     query: Query<TransactionQueryParams>,
 ) -> Result<HttpResponse, ApiError> {
     let portfolio_id = path.into_inner();
@@ -81,7 +82,7 @@ pub async fn list_transactions(
 #[get("/portfolios/{portfolio_id}/transactions/stats")]
 pub async fn get_transactions_stats(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Uuid>,
     query: Query<TransactionStatsQueryParams>,
     request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
@@ -97,7 +98,7 @@ pub async fn get_transactions_stats(
 #[get("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn get_transaction(
     state: web::Data<AppState>,
-    path: web::Path<(i32, i64)>,
+    path: web::Path<(Uuid, Uuid)>,
     request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
@@ -109,7 +110,7 @@ pub async fn get_transaction(
 #[put("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn update_transaction(
     state: web::Data<AppState>,
-    path: web::Path<(i32, i64)>,
+    path: web::Path<(Uuid, Uuid)>,
     body: Json<UpdateTransactionRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
@@ -121,7 +122,7 @@ pub async fn update_transaction(
 #[delete("/portfolios/{portfolio_id}/transactions/{tx_id}")]
 pub async fn delete_transaction(
     state: web::Data<AppState>,
-    path: web::Path<(i32, i64)>,
+    path: web::Path<(Uuid, Uuid)>,
 ) -> Result<HttpResponse, ApiError> {
     let (portfolio_id, tx_id) = path.into_inner();
     state.transaction_service.delete(portfolio_id, tx_id).await?;

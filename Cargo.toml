@@ -7,7 +7,7 @@ edition = "2021"
 actix-web = "^4.0"
 anyhow = "^1.0"
 chrono = { version = "0.4", features = ["serde"] }
-diesel = { version = "2.2.0", features = ["postgres", "r2d2", "chrono"] }
+diesel = { version = "2.2.0", features = ["postgres", "r2d2", "chrono", "uuid"] }
 dotenvy = "^0.15.0"
 tokio = { version = "1.49.0", features = ["rt"] }
 serde = { version = "1", features = ["derive"] }
@@ -24,6 +24,7 @@ rust_decimal = { version = "1.41", features = ["db-diesel2-postgres", "serde-str
 yfinance-rs = { version = "0.7.2", features = ["tracing"] }
 tokio-cron-scheduler = "0.15"
 subtle = "2"
+uuid = { version = "1", features = ["v7", "serde"] }
 
 [dev-dependencies]
 tokio = { version = "1.49.0", features = ["rt", "macros"] }

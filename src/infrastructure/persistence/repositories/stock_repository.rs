@@ -11,6 +11,7 @@ use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::{NewStock, Stock, UpdateStock};
 use crate::infrastructure::persistence::Db;
 use crate::infrastructure::persistence::error::DbError;
@@ -135,13 +136,13 @@ impl StockRepository for PgStockRepository {
 
     fn find_by_isin(
         &self,
-        isin: String,
+        isin: Isin,
     ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db
                 .exec(move |conn| {
                     let row = stocks::table
-                        .filter(stocks::isin.eq(&isin))
+                        .filter(stocks::isin.eq(isin.as_str()))
                         .select(StockRow::as_select())
                         .first(conn)?;
                     Stock::try_from(row)
@@ -216,7 +217,7 @@ impl StockRepository for PgStockRepository {
                     let row_data = NewStockRow {
                         symbol: &new.symbol,
                         name: &new.name,
-                        isin: &new.isin,
+                        isin: new.isin.as_str(),
                         currency: &new.currency,
                         market_region: new.market_region.as_str(),
                         market: new.market.as_deref(),
@@ -247,7 +248,7 @@ impl StockRepository for PgStockRepository {
                         .set((
                             stocks::symbol.eq(&data.symbol),
                             stocks::name.eq(&data.name),
-                            stocks::isin.eq(&data.isin),
+                            stocks::isin.eq(data.isin.as_str()),
                             stocks::currency.eq(&data.currency),
                             stocks::market_region.eq(data.market_region.as_str()),
                             stocks::market.eq(&data.market),

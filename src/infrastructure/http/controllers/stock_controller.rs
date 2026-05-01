@@ -4,6 +4,7 @@ use garde_actix_web::web::{Json, Query};
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::StockSearchResult;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::NewStock;
 use crate::infrastructure::http::PRIVATE_SHORT_CACHE;
 use crate::infrastructure::http::dto::request::stock_request::{
@@ -45,13 +46,13 @@ pub async fn search_stocks(
     Ok(http_response)
 }
 
-#[get("/stocks/{id}")]
+#[get("/stocks/{isin}")]
 pub async fn get_stock(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Isin>,
     request: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
-    let stock = state.stock_service.get_by_id(path.into_inner()).await?;
+    let stock = state.stock_service.get_by_isin(path.into_inner()).await?;
     let response = StockDetailResponse::from(stock);
     Ok(respond_with_etag(&request, &response, PRIVATE_SHORT_CACHE)?)
 }
@@ -63,30 +64,35 @@ pub async fn create_stock(
 ) -> Result<HttpResponse, ApiError> {
     let new = NewStock::from(body.into_inner());
     let stock = state.stock_service.create(new).await?;
-    let location = format!("/v1/stocks/{}", stock.id);
+    let location = format!("/v1/stocks/{}", stock.isin);
     Ok(HttpResponse::Created()
         .insert_header(("Location", location))
         .json(StockDetailResponse::from(stock)))
 }
 
-#[patch("/stocks/{id}")]
+#[patch("/stocks/{isin}")]
 pub async fn update_stock(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Isin>,
     body: Json<UpdateStockRequest>,
 ) -> Result<HttpResponse, ApiError> {
+    // Resolve isin → internal id, then delegate to the existing id-keyed
+    // service method. Two queries instead of one; acceptable for an admin
+    // CRUD where this path is rarely hit.
+    let current = state.stock_service.get_by_isin(path.into_inner()).await?;
     let stock = state
         .stock_service
-        .update(path.into_inner(), body.into_inner().into())
+        .update(current.id, body.into_inner().into())
         .await?;
     Ok(HttpResponse::Ok().json(StockDetailResponse::from(stock)))
 }
 
-#[delete("/stocks/{id}")]
+#[delete("/stocks/{isin}")]
 pub async fn delete_stock(
     state: web::Data<AppState>,
-    path: web::Path<i32>,
+    path: web::Path<Isin>,
 ) -> Result<HttpResponse, ApiError> {
-    state.stock_service.delete(path.into_inner()).await?;
+    let current = state.stock_service.get_by_isin(path.into_inner()).await?;
+    state.stock_service.delete(current.id).await?;
     Ok(HttpResponse::NoContent().finish())
 }

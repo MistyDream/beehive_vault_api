@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::application::error::AppError;
 use crate::application::ports::stock_repository::{StockRepository, StockSearchResult};
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::{NewStock, Stock, StockPatch, UpdateStock};
 
 pub struct StockService {
@@ -19,6 +20,10 @@ impl StockService {
 
     pub async fn get_by_id(&self, stock_id: i32) -> Result<Stock, AppError> {
         self.repo.find_by_id(stock_id).await
+    }
+
+    pub async fn get_by_isin(&self, isin: Isin) -> Result<Stock, AppError> {
+        self.repo.find_by_isin(isin).await
     }
 
     pub async fn create(&self, new: NewStock) -> Result<Stock, AppError> {

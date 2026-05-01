@@ -8,6 +8,7 @@ use actix_web::http::StatusCode;
 use actix_web::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH, LOCATION};
 use actix_web::test;
 use beehive_vault_api::domain::market::enums::MarketRegion;
+use beehive_vault_api::domain::market::isin::Isin;
 use beehive_vault_api::domain::market::stock::Stock;
 use serde_json::{Value, json};
 
@@ -187,12 +188,12 @@ async fn search_matches_on_name() {
 
 #[actix_web::test]
 async fn search_matches_on_isin() {
-    // `test_stock` builds isin = "ISIN{id:04}".
+    // `test_stock` builds an ISO 6166 ISIN of the form "US{id:010}".
     let stocks = vec![test_stock(42, "AAPL", "USD")];
     let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks?q=ISIN0042")
+        .uri("/v1/stocks?q=US0000000042")
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -301,14 +302,16 @@ async fn search_omits_x_result_truncated_when_below_cap() {
     assert_eq!(body.as_array().unwrap().len(), 5);
 }
 
-// ============================ GET /v1/stocks/{id} ============================
+// ============================ GET /v1/stocks/{isin} ==========================
 
 #[actix_web::test]
 async fn get_stock_returns_200_with_full_detail() {
     let stocks = vec![test_stock(42, "AAPL", "USD")];
     let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
-    let req = test::TestRequest::get().uri("/v1/stocks/42").to_request();
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/US0000000042")
+        .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
@@ -317,7 +320,7 @@ async fn get_stock_returns_200_with_full_detail() {
     let body: Value = test::read_body_json(resp).await;
     assert_eq!(body["id"], 42);
     assert_eq!(body["symbol"], "AAPL");
-    assert_eq!(body["isin"], "ISIN0042");
+    assert_eq!(body["isin"], "US0000000042");
     assert_eq!(body["currency"], "USD");
     assert_eq!(body["market_region"], "europe");
     // Detail DTO must surface every field — slim DTO drops these.
@@ -328,13 +331,28 @@ async fn get_stock_returns_200_with_full_detail() {
 }
 
 #[actix_web::test]
-async fn get_stock_returns_404_for_unknown_id() {
+async fn get_stock_returns_404_for_unknown_isin() {
     let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
-    let req = test::TestRequest::get().uri("/v1/stocks/999").to_request();
+    // Format-valid ISIN that doesn't exist in the repo → 404 (not 400).
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/US9999999999")
+        .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn get_stock_returns_400_when_isin_format_invalid() {
+    let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
+
+    let req = test::TestRequest::get().uri("/v1/stocks/not-an-isin").to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let body: Value = test::read_body_json(resp).await;
+    assert!(body["detail"].as_str().unwrap_or_default().contains("path parameter"));
 }
 
 #[actix_web::test]
@@ -344,12 +362,14 @@ async fn get_stock_returns_304_when_if_none_match_matches() {
         empty_price_repo(),
     );
 
-    let req = test::TestRequest::get().uri("/v1/stocks/1").to_request();
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/US0000000001")
+        .to_request();
     let resp = test::call_service(&app, req).await;
     let etag = resp.headers().get(ETAG).unwrap().to_str().unwrap().to_string();
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1")
+        .uri("/v1/stocks/US0000000001")
         .insert_header((IF_NONE_MATCH, etag.as_str()))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -391,8 +411,8 @@ async fn create_stock_returns_201_with_location_and_full_body() {
         .unwrap()
         .to_string();
     let body: Value = test::read_body_json(resp).await;
-    let id = body["id"].as_i64().expect("missing id in create response");
-    assert_eq!(location, format!("/v1/stocks/{id}"));
+    let isin = body["isin"].as_str().expect("missing isin in create response");
+    assert_eq!(location, format!("/v1/stocks/{isin}"));
     assert_eq!(body["symbol"], "TSLA");
     assert_eq!(body["isin"], "US88160R1014");
     assert_eq!(body["market_region"], "americas");
@@ -510,7 +530,7 @@ async fn create_stock_returns_409_when_isin_already_exists() {
     // Existing stock has the same ISIN our payload uses: "ISIN{id:04}" with id=88160 →
     // doesn't match "US88160R1014", so seed one that does.
     let mut existing = test_stock(1, "OTHER", "USD");
-    existing.isin = "US88160R1014".to_string();
+    existing.isin = Isin::try_new("US88160R1014").unwrap();
     let app = make_service!(
         Arc::new(InMemoryStockRepo::new(vec![existing])),
         empty_price_repo(),
@@ -527,7 +547,7 @@ async fn create_stock_returns_409_when_isin_already_exists() {
     assert!(body["detail"].as_str().unwrap_or_default().contains("isin"));
 }
 
-// ============================ PATCH /v1/stocks/{id} ==========================
+// ============================ PATCH /v1/stocks/{isin} ========================
 
 #[actix_web::test]
 async fn patch_stock_applies_partial_update_and_leaves_other_fields_untouched() {
@@ -537,7 +557,7 @@ async fn patch_stock_applies_partial_update_and_leaves_other_fields_untouched() 
         id: 7,
         symbol: "AAPL".to_string(),
         name: "Apple Inc.".to_string(),
-        isin: "US0378331005".to_string(),
+        isin: Isin::try_new("US0378331005").unwrap(),
         currency: "USD".to_string(),
         market_region: MarketRegion::Americas,
         market: Some("NASDAQ".to_string()),
@@ -551,7 +571,7 @@ async fn patch_stock_applies_partial_update_and_leaves_other_fields_untouched() 
     );
 
     let req = test::TestRequest::patch()
-        .uri("/v1/stocks/7")
+        .uri("/v1/stocks/US0378331005")
         .set_json(json!({ "sector": "Software" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -571,11 +591,11 @@ async fn patch_stock_applies_partial_update_and_leaves_other_fields_untouched() 
 }
 
 #[actix_web::test]
-async fn patch_stock_returns_404_for_unknown_id() {
+async fn patch_stock_returns_404_for_unknown_isin() {
     let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
     let req = test::TestRequest::patch()
-        .uri("/v1/stocks/999")
+        .uri("/v1/stocks/US9999999999")
         .set_json(json!({ "sector": "Technology" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -589,7 +609,7 @@ async fn patch_stock_returns_422_when_isin_format_invalid() {
     let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
     let req = test::TestRequest::patch()
-        .uri("/v1/stocks/7")
+        .uri("/v1/stocks/US0000000007")
         .set_json(json!({ "isin": "bogus" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -602,16 +622,16 @@ async fn patch_stock_returns_409_when_isin_collides_with_other() {
     // Two stocks with valid ISO 6166 ISINs — patch stock 2 with stock 1's ISIN
     // and expect a 409 from the UNIQUE-constraint mapping.
     let mut s1 = test_stock(1, "AAPL", "USD");
-    s1.isin = "US0378331005".to_string();
+    s1.isin = Isin::try_new("US0378331005").unwrap();
     let mut s2 = test_stock(2, "MSFT", "USD");
-    s2.isin = "US5949181045".to_string();
+    s2.isin = Isin::try_new("US5949181045").unwrap();
     let app = make_service!(
         Arc::new(InMemoryStockRepo::new(vec![s1, s2])),
         empty_price_repo(),
     );
 
     let req = test::TestRequest::patch()
-        .uri("/v1/stocks/2")
+        .uri("/v1/stocks/US5949181045")
         .set_json(json!({ "isin": "US0378331005" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -634,7 +654,7 @@ async fn patch_stock_returns_409_when_symbol_collides_with_other() {
 
     // Try to rename stock 2 (MSFT) to AAPL — already taken by stock 1.
     let req = test::TestRequest::patch()
-        .uri("/v1/stocks/2")
+        .uri("/v1/stocks/US0000000002")
         .set_json(json!({ "symbol": "AAPL" }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -642,29 +662,35 @@ async fn patch_stock_returns_409_when_symbol_collides_with_other() {
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 }
 
-// ============================ DELETE /v1/stocks/{id} =========================
+// ============================ DELETE /v1/stocks/{isin} =======================
 
 #[actix_web::test]
 async fn delete_stock_returns_204_when_no_references() {
     let stocks = vec![test_stock(5, "AAPL", "USD")];
     let app = make_service!(Arc::new(InMemoryStockRepo::new(stocks)), empty_price_repo());
 
-    let req = test::TestRequest::delete().uri("/v1/stocks/5").to_request();
+    let req = test::TestRequest::delete()
+        .uri("/v1/stocks/US0000000005")
+        .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // Subsequent GET must return 404 — the stock is really gone.
-    let req = test::TestRequest::get().uri("/v1/stocks/5").to_request();
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/US0000000005")
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 #[actix_web::test]
-async fn delete_stock_returns_404_for_unknown_id() {
+async fn delete_stock_returns_404_for_unknown_isin() {
     let app = make_service!(Arc::new(InMemoryStockRepo::default()), empty_price_repo());
 
-    let req = test::TestRequest::delete().uri("/v1/stocks/999").to_request();
+    let req = test::TestRequest::delete()
+        .uri("/v1/stocks/US9999999999")
+        .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -679,7 +705,9 @@ async fn delete_stock_returns_409_when_transaction_references_it() {
     let stock_repo = Arc::new(InMemoryStockRepo::with_fk_protected(stocks, &[5]));
     let app = make_service!(stock_repo, empty_price_repo());
 
-    let req = test::TestRequest::delete().uri("/v1/stocks/5").to_request();
+    let req = test::TestRequest::delete()
+        .uri("/v1/stocks/US0000000005")
+        .to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::CONFLICT);
@@ -693,7 +721,9 @@ async fn delete_stock_returns_409_when_transaction_references_it() {
     );
 
     // Stock must NOT have been deleted by the failed call.
-    let req = test::TestRequest::get().uri("/v1/stocks/5").to_request();
+    let req = test::TestRequest::get()
+        .uri("/v1/stocks/US0000000005")
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
 }

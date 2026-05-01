@@ -6,6 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use diesel::prelude::*;
+use uuid::Uuid;
 
 use crate::application::error::AppError;
 use crate::application::ports::portfolio_repository::PortfolioRepository;
@@ -28,7 +29,7 @@ impl PgPortfolioRepository {
 impl PortfolioRepository for PgPortfolioRepository {
     fn find_by_id(
         &self,
-        id: i32,
+        id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db
@@ -69,6 +70,7 @@ impl PortfolioRepository for PgPortfolioRepository {
             self.db
                 .exec(move |conn| {
                     let row_data = NewPortfolioRow {
+                        id: Uuid::now_v7(),
                         name: &new.name,
                         kind: new.kind.as_str(),
                         currency: &new.currency,
@@ -87,7 +89,7 @@ impl PortfolioRepository for PgPortfolioRepository {
 
     fn update(
         &self,
-        id: i32,
+        id: Uuid,
         data: UpdatePortfolio,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move {
@@ -111,7 +113,7 @@ impl PortfolioRepository for PgPortfolioRepository {
 
     fn delete(
         &self,
-        id: i32,
+        id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move {
             self.db

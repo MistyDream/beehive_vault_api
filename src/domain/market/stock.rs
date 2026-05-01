@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stock {
     pub id: i32,
     pub symbol: String,
     pub name: String,
-    pub isin: String,
+    pub isin: Isin,
     pub currency: String,
     pub market_region: MarketRegion,
     pub market: Option<String>,
@@ -20,7 +21,7 @@ pub struct Stock {
 pub struct NewStock {
     pub symbol: String,
     pub name: String,
-    pub isin: String,
+    pub isin: Isin,
     pub currency: String,
     pub market_region: MarketRegion,
     pub market: Option<String>,
@@ -39,7 +40,7 @@ pub type UpdateStock = NewStock;
 pub struct StockPatch {
     pub symbol: Option<String>,
     pub name: Option<String>,
-    pub isin: Option<String>,
+    pub isin: Option<Isin>,
     pub currency: Option<String>,
     pub market_region: Option<MarketRegion>,
     pub market: Option<String>,

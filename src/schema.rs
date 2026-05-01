@@ -56,7 +56,6 @@ diesel::table! {
 
 diesel::table! {
     portfolios (id) {
-        id -> Int4,
         name -> Varchar,
         kind -> Varchar,
         #[max_length = 3]
@@ -64,6 +63,7 @@ diesel::table! {
         description -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        id -> Uuid,
     }
 }
 
@@ -131,8 +131,6 @@ diesel::table! {
 
 diesel::table! {
     transactions (id) {
-        id -> Int8,
-        portfolio_id -> Int4,
         stock_id -> Nullable<Int4>,
         transaction_type -> Varchar,
         executed_at -> Date,
@@ -148,6 +146,8 @@ diesel::table! {
         exchange_rate -> Float8,
         notes -> Nullable<Text>,
         created_at -> Timestamp,
+        id -> Uuid,
+        portfolio_id -> Uuid,
     }
 }
 

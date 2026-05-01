@@ -28,7 +28,7 @@ cargo deny check                     # Check licenses, duplicates, advisories (d
 
 DDD layered architecture with strict one-way dependency: `infrastructure` → `application` → `domain`.
 
-- **`domain/`** — Pure business entities, value objects, and enums, organized by subdomain (`market/`, `scoring/`, `wallet/`). No framework imports (no Diesel, no Actix, no tokio). Allowed crates: `serde`, `chrono`, `rust_decimal`.
+- **`domain/`** — Pure business entities, value objects, and enums, organized by subdomain (`market/`, `scoring/`, `wallet/`). No framework imports (no Diesel, no Actix, no tokio). Allowed crates: `serde`, `chrono`, `rust_decimal`, `uuid`, `thiserror`.
 - **`application/`** — Use cases and boundary types:
   - `services/` — orchestration of domain logic (e.g. `PriceService`, `PriceBatchService`, `PositionService`).
   - `ports/` — trait definitions for outbound dependencies (repositories, external fetchers). Adapters live in `infrastructure/`.

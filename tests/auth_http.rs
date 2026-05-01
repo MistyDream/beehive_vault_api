@@ -64,7 +64,7 @@ macro_rules! make_service {
 async fn v1_returns_401_when_authorization_header_is_missing() {
     let app = make_service!(TEST_KEY);
 
-    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US0000000001/price").to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -94,7 +94,7 @@ async fn v1_returns_401_when_bearer_token_does_not_match() {
     let app = make_service!(TEST_KEY);
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", "Bearer bhv_test_wrong_key"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -110,7 +110,7 @@ async fn v1_returns_200_when_bearer_token_matches() {
     let app = make_service!(TEST_KEY);
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", format!("Bearer {TEST_KEY}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -122,7 +122,7 @@ async fn v1_returns_200_when_bearer_token_matches() {
 async fn v1_includes_www_authenticate_header_on_401() {
     let app = make_service!(TEST_KEY);
 
-    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US0000000001/price").to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
@@ -142,7 +142,7 @@ async fn v1_accepts_extra_whitespace_between_scheme_and_token() {
     let app = make_service!(TEST_KEY);
     // RFC 7235 §2.1 allows 1*SP between scheme and credentials.
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", format!("Bearer   {TEST_KEY}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -155,7 +155,7 @@ async fn v1_accepts_lowercase_bearer_scheme() {
     let app = make_service!(TEST_KEY);
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", format!("bearer {TEST_KEY}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -171,7 +171,7 @@ async fn v1_returns_401_for_same_length_wrong_token() {
     let wrong = "x".repeat(TEST_KEY.len());
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", format!("Bearer {wrong}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -184,7 +184,7 @@ async fn v1_returns_401_for_non_bearer_scheme() {
     let app = make_service!(TEST_KEY);
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", "Basic dXNlcjpwYXNz"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -197,7 +197,7 @@ async fn v1_returns_401_for_empty_bearer_token() {
     let app = make_service!(TEST_KEY);
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header(("Authorization", "Bearer "))
         .to_request();
     let resp = test::call_service(&app, req).await;

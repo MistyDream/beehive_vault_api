@@ -13,6 +13,7 @@ use std::pin::Pin;
 use std::sync::Mutex;
 
 use chrono::NaiveDate;
+use uuid::Uuid;
 
 use beehive_vault_api::application::error::AppError;
 use beehive_vault_api::application::ports::health_checker::HealthChecker;
@@ -24,6 +25,7 @@ use beehive_vault_api::application::ports::stock_repository::{
 };
 use beehive_vault_api::application::ports::transaction_repository::TransactionRepository;
 use beehive_vault_api::domain::market::enums::MarketRegion;
+use beehive_vault_api::domain::market::isin::Isin;
 use beehive_vault_api::domain::market::price::{NewPrice, Price};
 use beehive_vault_api::domain::market::stock::{NewStock, Stock, UpdateStock};
 use beehive_vault_api::domain::scoring::score_snapshot::ScoreSnapshot;
@@ -95,9 +97,17 @@ impl StockRepository for InMemoryStockRepo {
 
     fn find_by_isin(
         &self,
-        _isin: String,
+        isin: Isin,
     ) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>> {
-        Box::pin(async move { Err(AppError::NotFound) })
+        Box::pin(async move {
+            self.by_id
+                .lock()
+                .unwrap()
+                .values()
+                .find(|s| s.isin == isin)
+                .cloned()
+                .ok_or(AppError::NotFound)
+        })
     }
 
     fn search(
@@ -115,7 +125,7 @@ impl StockRepository for InMemoryStockRepo {
                 .filter(|s| {
                     s.symbol.to_lowercase().contains(&needle)
                         || s.name.to_lowercase().contains(&needle)
-                        || s.isin.to_lowercase().contains(&needle)
+                        || s.isin.as_str().to_lowercase().contains(&needle)
                 })
                 .cloned()
                 .collect();
@@ -319,7 +329,7 @@ pub struct NoOpPortfolioRepo;
 impl PortfolioRepository for NoOpPortfolioRepo {
     fn find_by_id(
         &self,
-        _id: i32,
+        _id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
     }
@@ -339,7 +349,7 @@ impl PortfolioRepository for NoOpPortfolioRepo {
 
     fn update(
         &self,
-        _id: i32,
+        _id: Uuid,
         _data: UpdatePortfolio,
     ) -> Pin<Box<dyn Future<Output = Result<Portfolio, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
@@ -347,7 +357,7 @@ impl PortfolioRepository for NoOpPortfolioRepo {
 
     fn delete(
         &self,
-        _id: i32,
+        _id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(false) })
     }
@@ -358,29 +368,29 @@ pub struct NoOpTransactionRepo;
 impl TransactionRepository for NoOpTransactionRepo {
     fn find_by_id(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
     }
 
     fn list_by_portfolio(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
     }
 
     fn list_by_portfolio_chronological(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
     }
 
     fn list_by_portfolio_filtered(
         &self,
-        _portfolio_id: i32,
+        _portfolio_id: Uuid,
         _filters: TransactionFilter,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<Transaction>, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(Vec::new()) })
@@ -395,8 +405,8 @@ impl TransactionRepository for NoOpTransactionRepo {
 
     fn update(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
         _data: UpdateTransaction,
     ) -> Pin<Box<dyn Future<Output = Result<Transaction, AppError>> + Send + '_>> {
         Box::pin(async move { Err(AppError::NotFound) })
@@ -404,8 +414,8 @@ impl TransactionRepository for NoOpTransactionRepo {
 
     fn delete(
         &self,
-        _portfolio_id: i32,
-        _tx_id: i64,
+        _portfolio_id: Uuid,
+        _tx_id: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, AppError>> + Send + '_>> {
         Box::pin(async move { Ok(false) })
     }
@@ -472,12 +482,15 @@ impl HealthChecker for NotReadyHealthChecker {
 
 // ================================ Small builders =============================
 
+/// Build a deterministic test stock. The generated ISIN is ISO 6166-formatted
+/// (`US` + 10 zero-padded digits, last digit acts as the check digit) so it
+/// passes path-level format validation without bespoke fixtures.
 pub fn test_stock(id: i32, symbol: &str, currency: &str) -> Stock {
     Stock {
         id,
         symbol: symbol.to_string(),
         name: format!("Stock {id}"),
-        isin: format!("ISIN{id:04}"),
+        isin: Isin::try_new(&format!("US{id:010}")).unwrap(),
         currency: currency.to_string(),
         market_region: MarketRegion::Europe,
         market: None,

@@ -18,7 +18,7 @@ fn date(y: i32, m: u32, d: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(y, m, d).unwrap()
 }
 
-// ======================= GET /v1/stocks/{stock_id}/price =====================
+// ======================= GET /v1/stocks/{isin}/price =====================
 
 #[actix_web::test]
 async fn latest_price_returns_200_with_cache_headers_and_currency_from_stock() {
@@ -30,7 +30,7 @@ async fn latest_price_returns_200_with_cache_headers_and_currency_from_stock() {
         Arc::new(InMemoryStockPriceRepo::with_prices(vec![price])),
     );
 
-    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US0000000001/price").to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), StatusCode::OK);
@@ -52,7 +52,7 @@ async fn latest_price_returns_404_when_stock_is_unknown() {
         Arc::new(InMemoryStockPriceRepo::new()),
     );
 
-    let req = test::TestRequest::get().uri("/v1/stocks/999/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US9999999999/price").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 
@@ -83,7 +83,7 @@ async fn latest_price_returns_404_when_stock_exists_but_has_no_price() {
         Arc::new(InMemoryStockPriceRepo::new()),
     );
 
-    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US0000000001/price").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
@@ -98,7 +98,7 @@ async fn latest_price_returns_304_when_if_none_match_matches() {
     );
 
     // First request to capture the ETag + Cache-Control.
-    let req = test::TestRequest::get().uri("/v1/stocks/1/price").to_request();
+    let req = test::TestRequest::get().uri("/v1/stocks/US0000000001/price").to_request();
     let resp = test::call_service(&app, req).await;
     let etag = resp
         .headers()
@@ -117,7 +117,7 @@ async fn latest_price_returns_304_when_if_none_match_matches() {
 
     // Replay with If-None-Match → 304 Not Modified.
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header((IF_NONE_MATCH, etag.clone()))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -150,7 +150,7 @@ async fn latest_price_returns_304_when_if_none_match_is_wildcard() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/price")
+        .uri("/v1/stocks/US0000000001/price")
         .insert_header((IF_NONE_MATCH, "*"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -166,7 +166,7 @@ async fn latest_price_returns_304_when_if_none_match_is_wildcard() {
     assert!(body.is_empty(), "304 must not carry a body");
 }
 
-// ======================== GET /v1/stocks/{id}/prices =========================
+// ======================== GET /v1/stocks/{isin}/prices =========================
 
 #[actix_web::test]
 async fn price_history_returns_prices_in_range_with_envelope_currency() {
@@ -182,7 +182,7 @@ async fn price_history_returns_prices_in_range_with_envelope_currency() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/prices?from=2026-04-23&to=2026-04-24")
+        .uri("/v1/stocks/US0000000001/prices?from=2026-04-23&to=2026-04-24")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -206,7 +206,7 @@ async fn price_history_returns_empty_list_for_stock_with_no_prices() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/prices?from=2026-04-01&to=2026-04-24")
+        .uri("/v1/stocks/US0000000001/prices?from=2026-04-01&to=2026-04-24")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -225,7 +225,7 @@ async fn price_history_returns_400_for_inverted_range() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/prices?from=2026-04-24&to=2026-04-01")
+        .uri("/v1/stocks/US0000000001/prices?from=2026-04-24&to=2026-04-01")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -262,7 +262,7 @@ async fn price_history_returns_400_when_from_is_missing() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/1/prices?to=2026-04-24")
+        .uri("/v1/stocks/US0000000001/prices?to=2026-04-24")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -294,7 +294,7 @@ async fn price_history_returns_404_for_unknown_stock() {
     );
 
     let req = test::TestRequest::get()
-        .uri("/v1/stocks/999/prices?from=2026-04-01&to=2026-04-24")
+        .uri("/v1/stocks/US9999999999/prices?from=2026-04-01&to=2026-04-24")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);

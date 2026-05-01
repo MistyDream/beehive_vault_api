@@ -2,6 +2,7 @@ use garde::Validate;
 use serde::Deserialize;
 
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::{NewStock, StockPatch};
 
 #[derive(Debug, Deserialize, Validate)]
@@ -24,6 +25,11 @@ fn non_blank_min_2(value: &String, _: &()) -> garde::Result {
 
 // Patterns inlined because `garde(pattern(...))` requires a literal. ISIN
 // check digit is intentionally not verified — format-only check.
+//
+// The ISIN regex below MUST stay in sync with `Isin::try_new` (domain). The
+// `From<…StockRequest>` impls re-parse the validated string via `Isin::try_new`
+// and `expect()` infallibility — any drift between this regex and the domain
+// validator will turn into a runtime panic.
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct CreateStockRequest {
@@ -72,10 +78,13 @@ pub struct UpdateStockRequest {
 
 impl From<CreateStockRequest> for NewStock {
     fn from(req: CreateStockRequest) -> Self {
+        // garde already validated the ISIN format via the same regex used by
+        // `Isin::try_new`, so this construction cannot fail.
+        let isin = Isin::try_new(&req.isin).expect("isin format pre-validated by garde");
         NewStock {
             symbol: req.symbol,
             name: req.name,
-            isin: req.isin,
+            isin,
             currency: req.currency,
             market_region: req.market_region,
             market: req.market,
@@ -88,10 +97,13 @@ impl From<CreateStockRequest> for NewStock {
 
 impl From<UpdateStockRequest> for StockPatch {
     fn from(req: UpdateStockRequest) -> Self {
+        let isin = req
+            .isin
+            .map(|s| Isin::try_new(&s).expect("isin format pre-validated by garde"));
         StockPatch {
             symbol: req.symbol,
             name: req.name,
-            isin: req.isin,
+            isin,
             currency: req.currency,
             market_region: req.market_region,
             market: req.market,

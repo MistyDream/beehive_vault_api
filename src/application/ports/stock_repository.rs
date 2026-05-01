@@ -3,6 +3,7 @@ use std::pin::Pin;
 
 use crate::application::error::AppError;
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::{NewStock, Stock, UpdateStock};
 
 pub struct StockSearchResult {
@@ -17,7 +18,7 @@ pub trait StockRepository: Send + Sync {
 
     fn find_by_symbol(&self, symbol: String) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
 
-    fn find_by_isin(&self, isin: String) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
+    fn find_by_isin(&self, isin: Isin) -> Pin<Box<dyn Future<Output = Result<Stock, AppError>> + Send + '_>>;
 
     fn search(
         &self,

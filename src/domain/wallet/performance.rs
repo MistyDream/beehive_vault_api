@@ -1,12 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::domain::wallet::enums::TransactionType;
 use crate::domain::wallet::transaction::Transaction;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceReport {
-    pub portfolio_id: i32,
+    pub portfolio_id: Uuid,
     pub currency: String,
     pub total_deposited: f64,
     pub total_withdrawn: f64,
@@ -26,7 +27,7 @@ pub struct PerformanceReport {
 /// Currently computes realized P&L, dividends, fees, and taxes.
 /// Unrealized P&L and TWR/MWR require current market prices (future enhancement).
 pub fn compute_performance(
-    portfolio_id: i32,
+    portfolio_id: Uuid,
     portfolio_currency: &str,
     transactions: &[Transaction],
 ) -> PerformanceReport {

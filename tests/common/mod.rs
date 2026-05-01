@@ -25,6 +25,11 @@ macro_rules! make_service {
                         ::beehive_vault_api::infrastructure::http::error::garde_error_handler,
                     ),
                 )
+                .app_data(
+                    ::actix_web::web::PathConfig::default().error_handler(
+                        ::beehive_vault_api::infrastructure::http::error::path_error_handler,
+                    ),
+                )
                 .service(::actix_web::web::scope("/v1").configure(
                     ::beehive_vault_api::infrastructure::http::routes::configure_routes,
                 )),

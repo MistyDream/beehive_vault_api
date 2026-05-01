@@ -1,12 +1,13 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::domain::wallet::enums::TransactionType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub id: i64,
-    pub portfolio_id: i32,
+    pub id: Uuid,
+    pub portfolio_id: Uuid,
     pub stock_id: Option<i32>,
     pub transaction_type: TransactionType,
     pub executed_at: NaiveDate,
@@ -23,7 +24,7 @@ pub struct Transaction {
 }
 
 pub struct NewTransaction {
-    pub portfolio_id: i32,
+    pub portfolio_id: Uuid,
     pub stock_id: Option<i32>,
     pub transaction_type: TransactionType,
     pub executed_at: NaiveDate,

@@ -1,5 +1,5 @@
 use actix_web::{HttpRequest, HttpResponse, ResponseError, http::StatusCode};
-use actix_web::error::{InternalError, JsonPayloadError};
+use actix_web::error::{InternalError, JsonPayloadError, PathError};
 use garde_actix_web::error::Error as GardeError;
 
 use crate::application::error::AppError;
@@ -22,6 +22,30 @@ pub enum ApiError {
 
     #[error("Unauthorized")]
     Unauthorized,
+}
+
+/// Map a path-extraction failure to a problem+json 400. Triggered when a
+/// typed path param (`web::Path<Uuid>`, `web::Path<Isin>`) fails to
+/// deserialize — wrong format, malformed UUID, etc. Without this, actix
+/// returns a plain-text 400 that bypasses the API's error contract.
+///
+/// The client-facing `detail` is intentionally generic: actix's underlying
+/// `PathError` message varies wildly between types (clean for `Isin`,
+/// parser-internals-leaking for `Uuid`) and exposing it is both inconsistent
+/// and too revealing. The verbose actix message is preserved in the warn log
+/// for ops/debugging.
+pub fn path_error_handler(err: PathError, req: &HttpRequest) -> actix_web::Error {
+    tracing::warn!(
+        method = %req.method(),
+        path = %req.path(),
+        error = %err,
+        "request rejected at path extraction"
+    );
+
+    let api_error: ApiError =
+        AppError::BadRequest("path parameter has invalid format".to_string()).into();
+    let response = api_error.error_response();
+    InternalError::from_response(api_error, response).into()
 }
 
 pub fn garde_error_handler(err: GardeError, req: &HttpRequest) -> actix_web::Error {

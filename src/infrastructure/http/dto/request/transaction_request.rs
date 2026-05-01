@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use garde::Validate;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::application::error::AppError;
 use crate::domain::wallet::enums::TransactionType;
@@ -110,7 +111,7 @@ pub struct PerformanceQueryParams {
 }
 
 impl CreateTransactionRequest {
-    pub fn into_new_transaction(self, portfolio_id: i32) -> Result<NewTransaction, AppError> {
+    pub fn into_new_transaction(self, portfolio_id: Uuid) -> Result<NewTransaction, AppError> {
         Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,
@@ -132,7 +133,7 @@ impl CreateTransactionRequest {
 }
 
 impl UpdateTransactionRequest {
-    pub fn into_update_transaction(self, portfolio_id: i32) -> Result<UpdateTransaction, AppError> {
+    pub fn into_update_transaction(self, portfolio_id: Uuid) -> Result<UpdateTransaction, AppError> {
         Ok(NewTransaction {
             portfolio_id,
             stock_id: self.stock_id,

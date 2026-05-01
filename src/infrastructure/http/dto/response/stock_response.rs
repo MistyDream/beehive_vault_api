@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use crate::domain::market::enums::MarketRegion;
+use crate::domain::market::isin::Isin;
 use crate::domain::market::stock::Stock;
 
 /// Slim DTO returned by `GET /v1/stocks?q=` — minimal payload tuned for the
@@ -24,15 +25,15 @@ impl From<Stock> for StockResponse {
     }
 }
 
-/// Full DTO returned by `GET /v1/stocks/{id}`, `POST /v1/stocks`, and
-/// `PATCH /v1/stocks/{id}` — exposes every persisted field, in contrast to
+/// Full DTO returned by `GET /v1/stocks/{isin}`, `POST /v1/stocks`, and
+/// `PATCH /v1/stocks/{isin}` — exposes every persisted field, in contrast to
 /// the slim `StockResponse` used by the search endpoint.
 #[derive(Serialize)]
 pub struct StockDetailResponse {
     pub id: i32,
     pub symbol: String,
     pub name: String,
-    pub isin: String,
+    pub isin: Isin,
     pub currency: String,
     pub market_region: MarketRegion,
     pub market: Option<String>,
