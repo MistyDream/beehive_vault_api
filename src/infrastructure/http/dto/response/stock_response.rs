@@ -25,8 +25,8 @@ impl From<Stock> for StockResponse {
     }
 }
 
-/// Full DTO returned by `GET /v1/stocks/{id}`, `POST /v1/stocks`, and
-/// `PATCH /v1/stocks/{id}` — exposes every persisted field, in contrast to
+/// Full DTO returned by `GET /v1/stocks/{isin}`, `POST /v1/stocks`, and
+/// `PATCH /v1/stocks/{isin}` — exposes every persisted field, in contrast to
 /// the slim `StockResponse` used by the search endpoint.
 #[derive(Serialize)]
 pub struct StockDetailResponse {
