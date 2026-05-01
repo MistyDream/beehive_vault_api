@@ -25,6 +25,11 @@ fn non_blank_min_2(value: &String, _: &()) -> garde::Result {
 
 // Patterns inlined because `garde(pattern(...))` requires a literal. ISIN
 // check digit is intentionally not verified — format-only check.
+//
+// The ISIN regex below MUST stay in sync with `Isin::try_new` (domain). The
+// `From<…StockRequest>` impls re-parse the validated string via `Isin::try_new`
+// and `expect()` infallibility — any drift between this regex and the domain
+// validator will turn into a runtime panic.
 #[derive(Debug, Deserialize, Validate)]
 #[garde(context(()))]
 pub struct CreateStockRequest {
