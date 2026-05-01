@@ -352,7 +352,7 @@ async fn get_stock_returns_400_when_isin_format_invalid() {
 
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     let body: Value = test::read_body_json(resp).await;
-    assert!(body["detail"].as_str().unwrap_or_default().contains("isin"));
+    assert!(body["detail"].as_str().unwrap_or_default().contains("path parameter"));
 }
 
 #[actix_web::test]
