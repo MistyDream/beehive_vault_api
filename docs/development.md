@@ -65,7 +65,8 @@ cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
+cargo test --test financial_foundation -- --ignored
 ```
 
-Les futurs tests d'intégration utiliseront exclusivement `beehive_vault_test`
+Les tests d'intégration utilisent exclusivement `beehive_vault_test`
 afin de ne jamais modifier les données de développement.

@@ -32,11 +32,24 @@ Types initiaux :
 - autre actif ;
 - autre dette.
 
-Informations minimales : nom, type, devise, solde initial, date du solde initial et état actif ou archivé.
+Informations minimales : nom, type, devise et état actif ou archivé.
 
 Dans le MVP, les comptes consolidés utilisent la devise principale du foyer. La conversion entre devises sera ajoutée lorsque le besoin sera réellement traité.
 
 Un solde positif augmente le patrimoine pour un actif et représente une somme due pour une dette. Cette convention devra être rendue explicite dans le code et l'interface.
+
+## Établissement financier
+
+Un établissement regroupe les comptes ouverts auprès d'un même organisme. Il
+appartient au foyer, mais son rattachement à un compte reste facultatif afin de
+représenter des espèces ou des actifs détenus sans intermédiaire.
+
+## Solde de rapprochement
+
+Un solde de rapprochement associe un montant à un compte et à une date. Il sert
+de point d'ancrage au calcul transactionnel et de valorisation manuelle
+temporaire pour les investissements. Il ne constitue jamais un revenu ou une
+dépense.
 
 ## Transaction
 
@@ -95,7 +108,8 @@ Les valeurs suivantes sont dérivées des données précédentes et ne constitue
 - une transaction importée possède une clé de déduplication stable ;
 - une donnée archivée reste disponible dans l'historique ;
 - les calculs consolidés excluent les transferts internes ;
-- seules les transactions postérieures au solde initial modifient ce solde ;
+- seules les transactions postérieures au solde de rapprochement retenu
+  modifient ce solde ;
 - les montants utilisent une représentation décimale, jamais un flottant.
 
 ## Décisions reportées
