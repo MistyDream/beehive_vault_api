@@ -23,15 +23,17 @@ Les fonctions spécialisées comme le suivi boursier avancé, le scoring d'entre
 - [Feuille de route](docs/roadmap.md)
 - [Architecture technique](docs/architecture.md)
 - [Journal des décisions d'architecture](docs/adr/README.md)
+- [Environnement de développement](docs/development.md)
 
 ## Socle technique
 
 Le nouveau socle utilise Rust 2024, Axum, SQLx et PostgreSQL. L'application est
 un monolithe modulaire organisé par fonctionnalité et n'utilise pas d'ORM.
 
-Après avoir installé Rust et préparé une base PostgreSQL :
+Après avoir installé Rust et PostgreSQL :
 
 ```bash
+./scripts/setup-postgres.sh
 cp .env.example .env
 cargo run
 ```
