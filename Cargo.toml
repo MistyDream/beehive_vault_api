@@ -1,30 +1,26 @@
 [package]
 name = "beehive_vault_api"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-actix-web = "^4.0"
-anyhow = "^1.0"
-chrono = { version = "0.4", features = ["serde"] }
-diesel = { version = "2.2.0", features = ["postgres", "r2d2", "chrono", "uuid"] }
-dotenvy = "^0.15.0"
-tokio = { version = "1.49.0", features = ["rt"] }
+axum = "0.8.9"
+dotenvy = "0.15.7"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+sqlx = { version = "0.9.0", default-features = false, features = [
+    "chrono",
+    "macros",
+    "migrate",
+    "postgres",
+    "runtime-tokio",
+    "rust_decimal",
+    "tls-rustls-ring-native-roots",
+    "uuid",
+] }
 thiserror = "2"
-garde = { version = "0.22.1", features = ["derive", "regex"] }
-garde-actix-web = "0.12.0"
-actix-cors = "0.7.1"
-actix-governor = "0.10"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-actix-web = "0.7"
-rust_decimal = { version = "1.41", features = ["db-diesel2-postgres", "serde-str"] }
-yfinance-rs = { version = "0.7.2", features = ["tracing"] }
-tokio-cron-scheduler = "0.15"
-subtle = "2"
-uuid = { version = "1", features = ["v7", "serde"] }
 
 [dev-dependencies]
-tokio = { version = "1.49.0", features = ["rt", "macros"] }
+tower = { version = "0.5", features = ["util"] }

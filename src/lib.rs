@@ -1,5 +1,10 @@
-pub mod application;
+pub mod app;
 pub mod config;
-pub mod domain;
-pub mod infrastructure;
-pub mod schema;
+pub mod features;
+
+use sqlx::PgPool;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: PgPool,
+}

@@ -1,28 +1,59 @@
-use anyhow::Result;
-use dotenvy::dotenv;
+use std::error::Error;
+
+use beehive_vault_api::{AppState, app, config::Settings};
+use sqlx::postgres::PgPoolOptions;
+use tokio::{net::TcpListener, signal};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use beehive_vault_api::config::{settings, state};
-use beehive_vault_api::infrastructure::http::server;
-use beehive_vault_api::infrastructure::scheduler;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    dotenvy::dotenv().ok();
+    init_tracing();
 
-#[actix_web::main]
-async fn main() -> Result<()> {
-    dotenv().ok();
+    let settings = Settings::from_env()?;
+    let db = PgPoolOptions::new()
+        .max_connections(settings.database_max_connections)
+        .connect(&settings.database_url)
+        .await?;
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
-        .init();
+    sqlx::migrate!().run(&db).await?;
 
-    settings::init()?;
-    let services = state::init()?;
+    let listener = TcpListener::bind(settings.bind_address).await?;
+    info!(address = %settings.bind_address, "Beehive Vault API is listening");
 
-    let _scheduler = if settings::get().scheduler.enabled {
-        Some(scheduler::start(services.price_batch).await?)
-    } else {
-        tracing::info!("price scheduler disabled (PRICE_SCHEDULER_ENABLED is off)");
-        None
+    axum::serve(listener, app::router(AppState { db }))
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
+
+    Ok(())
+}
+
+fn init_tracing() {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
     };
 
-    server::run(services.http).await
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install termination signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
+    }
 }

@@ -1,4 +1,0 @@
-UPDATE stocks SET currency = 'EUR' WHERE currency IS NULL;
-
-ALTER TABLE stocks ALTER COLUMN currency SET DEFAULT 'EUR';
-ALTER TABLE stocks ALTER COLUMN currency SET NOT NULL;
