@@ -1,0 +1,20 @@
+# Architecture Decision Records
+
+Ce répertoire conserve les décisions d'architecture importantes de Beehive Vault. Un ADR explique le contexte d'une décision, le choix effectué, les alternatives considérées et ses conséquences.
+
+## Cycle de vie
+
+Un ADR possède l'un des statuts suivants :
+
+- `Proposé` : la décision est en discussion ;
+- `Accepté` : la décision guide le projet ;
+- `Remplacé` : un nouvel ADR prend sa place ;
+- `Abandonné` : la décision n'est plus applicable sans remplacement direct.
+
+Un ADR accepté n'est pas réécrit pour refléter une nouvelle décision. Un nouvel
+ADR est créé et référence celui qu'il remplace afin de préserver l'historique.
+
+## Index
+
+- [ADR-0001 — Utiliser un monolithe modulaire organisé par fonctionnalité](0001-modular-monolith.md)
+- [ADR-0002 — Utiliser Rust, Axum, SQLx et PostgreSQL sans ORM](0002-rust-axum-sqlx-postgresql.md)
