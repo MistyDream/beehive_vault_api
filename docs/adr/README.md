@@ -18,3 +18,4 @@ ADR est créé et référence celui qu'il remplace afin de préserver l'historiq
 
 - [ADR-0001 — Utiliser un monolithe modulaire organisé par fonctionnalité](0001-modular-monolith.md)
 - [ADR-0002 — Utiliser Rust, Axum, SQLx et PostgreSQL sans ORM](0002-rust-axum-sqlx-postgresql.md)
+- [ADR-0003 — Utiliser des soldes de rapprochement comme points d'ancrage](0003-reconciliation-balance-snapshots.md)
