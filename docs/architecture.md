@@ -22,22 +22,42 @@ Le code est organisé par fonctionnalité plutôt que par couche technique :
 src/
 ├── app.rs
 ├── config.rs
+├── database.rs
 ├── main.rs
+├── types.rs
 └── features/
-    ├── health.rs
+    ├── health/
     ├── households/
+    ├── institutions/
     ├── accounts/
-    ├── transactions/
-    └── dashboard/
+    └── net_worth/
 ```
 
-Chaque fonctionnalité ne crée que les éléments dont elle a besoin : routes, types, requêtes et éventuellement un service lorsqu'une véritable orchestration métier existe.
+Chaque module fonctionnel possède sa configuration, son état Axum et ses routes. Il expose `configure(database)` pour construire ses dépendances et `routes(module)` pour produire son routeur. `app.rs` assemble ces routeurs et applique les préoccupations globales telles que le préfixe `/v1`.
+
+Le type `Database` encapsule le pool PostgreSQL. Il fournit l'accès au pool pour les requêtes simples et l'ouverture explicite d'une transaction pour les opérations atomiques. Chaque module reçoit un clone léger de `Database` lors de sa configuration ; aucun état global Axum n'est partagé entre tous les modules.
+
+La structure interne reste proportionnelle à la complexité de la fonctionnalité. Un module simple peut contenir uniquement `mod.rs` et `handlers.rs`. Le module `accounts`, qui porte des validations et une création atomique, sépare actuellement :
+
+```text
+accounts/
+├── domain.rs
+├── dto.rs
+├── handlers.rs
+├── mod.rs
+├── repository.rs
+└── service.rs
+```
+
+Le handler traite HTTP, le service orchestre le cas d'utilisation et le repository contient SQLx ainsi que les transactions PostgreSQL. Aucun trait de repository n'est ajouté tant qu'une seconde implémentation ou un besoin de substitution précis ne le justifie.
 
 ## Frontières conservées
 
 - les règles financières ne dépendent pas des types HTTP ;
 - les données entrantes sont validées à la frontière de l'API ;
 - les opérations atomiques utilisent des transactions PostgreSQL ;
+- les services métier ne manipulent ni `PgPool` ni les transactions SQLx ;
+- chaque module construit ses dépendances et possède son routeur Axum ;
 - les services externes sont isolés derrière un trait lorsqu'une substitution est réellement utile ;
 - les calculs purs sont testés sans base de données ;
 - les requêtes et migrations sont testées avec PostgreSQL.
