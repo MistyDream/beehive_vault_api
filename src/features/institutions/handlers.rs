@@ -5,37 +5,38 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{
-    AppState,
     error::{ApiError, required_text},
+    types::{HouseholdId, InstitutionId},
 };
 
+use super::InstitutionsModule;
+
 #[derive(Deserialize)]
-pub struct CreateInstitutionRequest {
+pub(super) struct CreateInstitutionRequest {
     name: String,
 }
 
 #[derive(Deserialize)]
-pub struct UpdateInstitutionRequest {
+pub(super) struct UpdateInstitutionRequest {
     name: String,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct InstitutionResponse {
-    id: Uuid,
-    household_id: Uuid,
+pub(super) struct InstitutionResponse {
+    id: InstitutionId,
+    household_id: HouseholdId,
     name: String,
     archived_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
 
-pub async fn create(
-    State(state): State<AppState>,
-    Path(household_id): Path<Uuid>,
+pub(super) async fn create(
+    State(module): State<InstitutionsModule>,
+    Path(household_id): Path<HouseholdId>,
     Json(request): Json<CreateInstitutionRequest>,
 ) -> Result<(StatusCode, Json<InstitutionResponse>), ApiError> {
     let name = required_text(request.name, "name")?;
@@ -43,31 +44,31 @@ pub async fn create(
         "INSERT INTO institutions (id, household_id, name) VALUES ($1, $2, $3) \
          RETURNING id, household_id, name, archived_at, created_at, updated_at",
     )
-    .bind(Uuid::now_v7())
+    .bind(InstitutionId::new())
     .bind(household_id)
     .bind(name)
-    .fetch_one(&state.db)
+    .fetch_one(module.database.pool())
     .await?;
     Ok((StatusCode::CREATED, Json(institution)))
 }
 
-pub async fn list(
-    State(state): State<AppState>,
-    Path(household_id): Path<Uuid>,
+pub(super) async fn list(
+    State(module): State<InstitutionsModule>,
+    Path(household_id): Path<HouseholdId>,
 ) -> Result<Json<Vec<InstitutionResponse>>, ApiError> {
     let institutions = sqlx::query_as::<_, InstitutionResponse>(
         "SELECT id, household_id, name, archived_at, created_at, updated_at \
          FROM institutions WHERE household_id = $1 AND archived_at IS NULL ORDER BY lower(name)",
     )
     .bind(household_id)
-    .fetch_all(&state.db)
+    .fetch_all(module.database.pool())
     .await?;
     Ok(Json(institutions))
 }
 
-pub async fn update(
-    State(state): State<AppState>,
-    Path((household_id, institution_id)): Path<(Uuid, Uuid)>,
+pub(super) async fn update(
+    State(module): State<InstitutionsModule>,
+    Path((household_id, institution_id)): Path<(HouseholdId, InstitutionId)>,
     Json(request): Json<UpdateInstitutionRequest>,
 ) -> Result<Json<InstitutionResponse>, ApiError> {
     let name = required_text(request.name, "name")?;
@@ -79,15 +80,15 @@ pub async fn update(
     .bind(household_id)
     .bind(institution_id)
     .bind(name)
-    .fetch_optional(&state.db)
+    .fetch_optional(module.database.pool())
     .await?
     .ok_or_else(|| ApiError::NotFound("Institution not found".to_owned()))?;
     Ok(Json(institution))
 }
 
-pub async fn archive(
-    State(state): State<AppState>,
-    Path((household_id, institution_id)): Path<(Uuid, Uuid)>,
+pub(super) async fn archive(
+    State(module): State<InstitutionsModule>,
+    Path((household_id, institution_id)): Path<(HouseholdId, InstitutionId)>,
 ) -> Result<StatusCode, ApiError> {
     let result = sqlx::query(
         "UPDATE institutions SET archived_at = now(), updated_at = now() \
@@ -95,7 +96,7 @@ pub async fn archive(
     )
     .bind(household_id)
     .bind(institution_id)
-    .execute(&state.db)
+    .execute(module.database.pool())
     .await?;
     if result.rows_affected() == 0 {
         return Err(ApiError::NotFound("Institution not found".to_owned()));

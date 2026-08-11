@@ -5,7 +5,7 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
 };
-use beehive_vault_api::{AppState, app};
+use beehive_vault_api::app;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
@@ -25,7 +25,7 @@ async fn financial_foundation_calculates_net_worth() {
         .run(&db)
         .await
         .expect("test migrations should succeed");
-    let application = app::router(AppState { db: db.clone() });
+    let application = app::build(db.clone());
 
     let household = send_json(
         &application,

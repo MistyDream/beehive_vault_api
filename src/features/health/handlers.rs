@@ -1,20 +1,20 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 
-use crate::AppState;
+use super::HealthModule;
 
 #[derive(Serialize)]
-pub struct HealthResponse {
+pub(super) struct HealthResponse {
     status: &'static str,
 }
 
-pub async fn liveness() -> Json<HealthResponse> {
+pub(super) async fn liveness() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-pub async fn readiness(State(state): State<AppState>) -> impl IntoResponse {
+pub(super) async fn readiness(State(module): State<HealthModule>) -> impl IntoResponse {
     match sqlx::query_scalar::<_, i32>("SELECT 1")
-        .fetch_one(&state.db)
+        .fetch_one(module.database.pool())
         .await
     {
         Ok(_) => (StatusCode::OK, Json(HealthResponse { status: "ready" })),

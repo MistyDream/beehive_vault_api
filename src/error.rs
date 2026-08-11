@@ -69,17 +69,3 @@ pub fn required_text(value: String, field: &str) -> Result<String, ApiError> {
     }
     Ok(trimmed.to_owned())
 }
-
-pub fn currency_code(value: String) -> Result<String, ApiError> {
-    let normalized = value.trim().to_uppercase();
-    if normalized.len() != 3
-        || !normalized
-            .chars()
-            .all(|character| character.is_ascii_alphabetic())
-    {
-        return Err(ApiError::BadRequest(
-            "currency must be a three-letter code".to_owned(),
-        ));
-    }
-    Ok(normalized)
-}

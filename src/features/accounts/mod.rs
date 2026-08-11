@@ -1,0 +1,46 @@
+mod domain;
+mod dto;
+mod handlers;
+mod repository;
+mod service;
+
+use axum::{
+    Router,
+    routing::{get, post},
+};
+
+use crate::database::Database;
+
+use repository::AccountRepository;
+use service::AccountService;
+
+#[derive(Clone)]
+pub(crate) struct AccountsModule {
+    service: AccountService,
+}
+
+pub(crate) fn configure(database: Database) -> AccountsModule {
+    let repository = AccountRepository::new(database);
+    let service = AccountService::new(repository);
+
+    AccountsModule { service }
+}
+
+pub(crate) fn routes(module: AccountsModule) -> Router {
+    Router::new()
+        .route(
+            "/households/{household_id}/accounts",
+            post(handlers::create).get(handlers::list),
+        )
+        .route(
+            "/households/{household_id}/accounts/{account_id}",
+            get(handlers::get)
+                .patch(handlers::update)
+                .delete(handlers::archive),
+        )
+        .route(
+            "/households/{household_id}/accounts/{account_id}/balances",
+            post(handlers::create_balance).get(handlers::list_balances),
+        )
+        .with_state(module)
+}

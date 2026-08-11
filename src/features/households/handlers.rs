@@ -5,38 +5,38 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{
-    AppState,
-    error::{ApiError, currency_code, required_text},
+    error::{ApiError, required_text},
+    types::{CurrencyCode, HouseholdId},
 };
+
+use super::HouseholdsModule;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateHouseholdRequest {
+pub(super) struct CreateHouseholdRequest {
     name: String,
-    base_currency: String,
+    base_currency: CurrencyCode,
     timezone: String,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct HouseholdResponse {
-    id: Uuid,
+pub(super) struct HouseholdResponse {
+    id: HouseholdId,
     name: String,
-    base_currency: String,
+    base_currency: CurrencyCode,
     timezone: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
 
-pub async fn create(
-    State(state): State<AppState>,
+pub(super) async fn create(
+    State(module): State<HouseholdsModule>,
     Json(request): Json<CreateHouseholdRequest>,
 ) -> Result<(StatusCode, Json<HouseholdResponse>), ApiError> {
     let name = required_text(request.name, "name")?;
-    let base_currency = currency_code(request.base_currency)?;
     let timezone = required_text(request.timezone, "timezone")?;
 
     let household = sqlx::query_as::<_, HouseholdResponse>(
@@ -44,26 +44,26 @@ pub async fn create(
          VALUES ($1, $2, $3, $4) \
          RETURNING id, name, base_currency, timezone, created_at, updated_at",
     )
-    .bind(Uuid::now_v7())
+    .bind(HouseholdId::new())
     .bind(name)
-    .bind(base_currency)
+    .bind(request.base_currency)
     .bind(timezone)
-    .fetch_one(&state.db)
+    .fetch_one(module.database.pool())
     .await?;
 
     Ok((StatusCode::CREATED, Json(household)))
 }
 
-pub async fn get(
-    State(state): State<AppState>,
-    Path(household_id): Path<Uuid>,
+pub(super) async fn get(
+    State(module): State<HouseholdsModule>,
+    Path(household_id): Path<HouseholdId>,
 ) -> Result<Json<HouseholdResponse>, ApiError> {
     let household = sqlx::query_as::<_, HouseholdResponse>(
         "SELECT id, name, base_currency, timezone, created_at, updated_at \
          FROM households WHERE id = $1",
     )
     .bind(household_id)
-    .fetch_optional(&state.db)
+    .fetch_optional(module.database.pool())
     .await?
     .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
 

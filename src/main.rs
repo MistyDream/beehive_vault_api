@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use beehive_vault_api::{AppState, app, config::Settings};
+use beehive_vault_api::{app, config::Settings};
 use sqlx::postgres::PgPoolOptions;
 use tokio::{net::TcpListener, signal};
 use tracing::info;
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(settings.bind_address).await?;
     info!(address = %settings.bind_address, "Beehive Vault API is listening");
 
-    axum::serve(listener, app::router(AppState { db }))
+    axum::serve(listener, app::build(db))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
 

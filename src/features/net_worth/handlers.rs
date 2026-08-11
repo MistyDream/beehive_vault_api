@@ -2,37 +2,41 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use rust_decimal::Decimal;
 use serde::Serialize;
-use uuid::Uuid;
 
-use crate::{AppState, error::ApiError};
+use crate::{
+    error::ApiError,
+    types::{AccountBalance, CurrencyCode, HouseholdId},
+};
+
+use super::NetWorthModule;
 
 #[derive(Serialize, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
-pub struct NetWorthResponse {
-    currency: String,
-    assets: Decimal,
-    liabilities: Decimal,
-    net_worth: Decimal,
+pub(super) struct NetWorthResponse {
+    currency: CurrencyCode,
+    assets: AccountBalance,
+    liabilities: AccountBalance,
+    net_worth: AccountBalance,
 }
 
 #[derive(sqlx::FromRow)]
 struct NetWorthAmounts {
-    assets: Decimal,
-    liabilities: Decimal,
-    net_worth: Decimal,
+    assets: AccountBalance,
+    liabilities: AccountBalance,
+    net_worth: AccountBalance,
 }
 
-pub async fn summary(
-    State(state): State<AppState>,
-    Path(household_id): Path<Uuid>,
+pub(super) async fn summary(
+    State(module): State<NetWorthModule>,
+    Path(household_id): Path<HouseholdId>,
 ) -> Result<Json<NetWorthResponse>, ApiError> {
-    let currency: String = sqlx::query_scalar("SELECT base_currency FROM households WHERE id = $1")
-        .bind(household_id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+    let currency: CurrencyCode =
+        sqlx::query_scalar("SELECT base_currency FROM households WHERE id = $1")
+            .bind(household_id)
+            .fetch_optional(module.database.pool())
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
 
     let amounts = sqlx::query_as::<_, NetWorthAmounts>(
         "WITH latest_balances AS ( \
@@ -53,7 +57,7 @@ pub async fn summary(
         FROM contributions",
     )
     .bind(household_id)
-    .fetch_one(&state.db)
+    .fetch_one(module.database.pool())
     .await?;
 
     Ok(Json(NetWorthResponse {
