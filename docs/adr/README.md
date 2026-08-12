@@ -20,3 +20,4 @@ ADR est créé et référence celui qu'il remplace afin de préserver l'historiq
 - [ADR-0002 — Utiliser Rust, Axum, SQLx et PostgreSQL sans ORM](0002-rust-axum-sqlx-postgresql.md)
 - [ADR-0003 — Utiliser des soldes de rapprochement comme points d'ancrage](0003-reconciliation-balance-snapshots.md)
 - [ADR-0004 — Composer explicitement les modules Axum](0004-explicit-module-composition.md)
+- [ADR-0005 — Modéliser les flux financiers par des transactions signées](0005-model-financial-transactions.md)
