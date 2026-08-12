@@ -3,12 +3,13 @@ use sqlx::PgPool;
 
 use crate::{
     database::Database,
-    features::{accounts, health, households, institutions, net_worth},
+    features::{accounts, categories, health, households, institutions, net_worth},
 };
 
 pub fn build(pool: PgPool) -> Router {
     let database = Database::new(pool);
     let accounts = accounts::configure(database.clone());
+    let categories = categories::configure(database.clone());
     let health = health::configure(database.clone());
     let households = households::configure(database.clone());
     let institutions = institutions::configure(database.clone());
@@ -16,6 +17,7 @@ pub fn build(pool: PgPool) -> Router {
 
     let api = Router::new()
         .merge(accounts::routes(accounts))
+        .merge(categories::routes(categories))
         .merge(households::routes(households))
         .merge(institutions::routes(institutions))
         .merge(net_worth::routes(net_worth));

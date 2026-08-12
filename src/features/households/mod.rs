@@ -1,16 +1,26 @@
+mod domain;
+mod dto;
 mod handlers;
+mod repository;
+mod service;
 
 use axum::{Router, routing::post};
 
 use crate::database::Database;
 
+use repository::HouseholdRepository;
+use service::HouseholdService;
+
 #[derive(Clone)]
 pub(crate) struct HouseholdsModule {
-    database: Database,
+    service: HouseholdService,
 }
 
 pub(crate) fn configure(database: Database) -> HouseholdsModule {
-    HouseholdsModule { database }
+    let repository = HouseholdRepository::new(database);
+    let service = HouseholdService::new(repository);
+
+    HouseholdsModule { service }
 }
 
 pub(crate) fn routes(module: HouseholdsModule) -> Router {

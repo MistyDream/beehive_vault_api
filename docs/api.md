@@ -16,6 +16,17 @@ de chaînes afin de préserver leur précision.
 - `PATCH /v1/households/{household_id}/institutions/{institution_id}` le renomme ;
 - `DELETE /v1/households/{household_id}/institutions/{institution_id}` l'archive.
 
+## Catégories
+
+- `POST /v1/households/{household_id}/categories` crée une catégorie personnalisée ;
+- `GET /v1/households/{household_id}/categories` liste les catégories actives ;
+- `PATCH /v1/households/{household_id}/categories/{category_id}` renomme une catégorie ;
+- `DELETE /v1/households/{household_id}/categories/{category_id}` l'archive.
+
+La création d'un foyer crée atomiquement son catalogue initial de 19 catégories.
+Une catégorie possède un `kind` égal à `income` ou `expense`. La liste accepte le
+filtre facultatif `kind`. Le type d'une catégorie est immuable après sa création.
+
 ## Comptes
 
 - `POST /v1/households/{household_id}/accounts` crée un compte et son premier

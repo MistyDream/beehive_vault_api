@@ -47,6 +47,7 @@ uuid_id!(HouseholdId);
 uuid_id!(InstitutionId);
 uuid_id!(AccountId);
 uuid_id!(BalanceSnapshotId);
+uuid_id!(CategoryId);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, sqlx::Type)]
 #[serde(transparent)]
