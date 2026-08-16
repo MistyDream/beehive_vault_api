@@ -1,5 +1,6 @@
 use std::{fmt, str::FromStr};
 
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use uuid::Uuid;
@@ -48,6 +49,7 @@ uuid_id!(InstitutionId);
 uuid_id!(AccountId);
 uuid_id!(BalanceSnapshotId);
 uuid_id!(CategoryId);
+uuid_id!(TransactionId);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, sqlx::Type)]
 #[serde(transparent)]
@@ -138,6 +140,39 @@ impl Money {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("timezone must be a valid IANA time zone")]
+pub struct TimeZoneIdError;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct TimeZoneId(String);
+
+impl TimeZoneId {
+    pub fn new(value: impl AsRef<str>) -> Result<Self, TimeZoneIdError> {
+        let value = value.as_ref().trim();
+
+        value
+            .parse::<chrono_tz::Tz>()
+            .map_err(|_| TimeZoneIdError)?;
+
+        Ok(Self(value.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn date_at(&self, instant: DateTime<Utc>) -> Result<NaiveDate, TimeZoneIdError> {
+        let timezone = self
+            .as_str()
+            .parse::<chrono_tz::Tz>()
+            .map_err(|_| TimeZoneIdError)?;
+
+        Ok(instant.with_timezone(&timezone).date_naive())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,5 +195,28 @@ mod tests {
         let decoded: HouseholdId = serde_json::from_str(&json).unwrap();
 
         assert_eq!(decoded, household_id);
+    }
+
+    #[test]
+    fn time_zone_id_trims_valid_value() {
+        let timezone = TimeZoneId::new(" Europe/Paris ").unwrap();
+
+        assert_eq!(timezone.as_str(), "Europe/Paris");
+    }
+
+    #[test]
+    fn time_zone_id_rejects_unknown_value() {
+        assert!(TimeZoneId::new("Not/AZone").is_err());
+    }
+
+    #[test]
+    fn time_zone_id_converts_utc_instant_to_local_date() {
+        let timezone = TimeZoneId::new("Europe/Paris").unwrap();
+        let instant = "2026-08-11T22:30:00Z".parse::<DateTime<Utc>>().unwrap();
+
+        assert_eq!(
+            timezone.date_at(instant).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 8, 12).unwrap()
+        );
     }
 }

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::types::{CurrencyCode, HouseholdId};
+use crate::types::{CurrencyCode, HouseholdId, TimeZoneId};
 
 use super::{domain::Household, service::CreateHouseholdCommand};
 
@@ -29,7 +29,7 @@ pub struct HouseholdResponse {
     id: HouseholdId,
     name: String,
     base_currency: CurrencyCode,
-    timezone: String,
+    timezone: TimeZoneId,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }

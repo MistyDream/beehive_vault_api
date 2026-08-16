@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use crate::{
     database::Database,
     features::categories::INITIAL_CATEGORIES,
-    types::{CategoryId, CurrencyCode, HouseholdId},
+    types::{CategoryId, CurrencyCode, HouseholdId, TimeZoneId},
 };
 
 use super::domain::{Household, NewHousehold};
@@ -28,7 +28,7 @@ impl HouseholdRepository {
         .bind(household.id)
         .bind(household.name)
         .bind(household.base_currency)
-        .bind(household.timezone)
+        .bind(household.timezone.as_str())
         .fetch_one(&mut *transaction)
         .await?;
 
@@ -79,7 +79,8 @@ impl TryFrom<HouseholdRow> for Household {
             id: row.id,
             name: row.name,
             base_currency: row.base_currency,
-            timezone: row.timezone,
+            timezone: TimeZoneId::new(row.timezone)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             created_at: row.created_at,
             updated_at: row.updated_at,
         })

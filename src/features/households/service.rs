@@ -1,6 +1,6 @@
 use crate::{
     error::{ApiError, required_text},
-    types::{CurrencyCode, HouseholdId},
+    types::{CurrencyCode, HouseholdId, TimeZoneId},
 };
 
 use super::{
@@ -29,7 +29,8 @@ impl HouseholdService {
             id: HouseholdId::new(),
             name: required_text(command.name, "name")?,
             base_currency: command.base_currency,
-            timezone: required_text(command.timezone, "timezone")?,
+            timezone: TimeZoneId::new(command.timezone)
+                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
         };
         Ok(self.repository.create(household).await?)
     }
