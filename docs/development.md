@@ -66,6 +66,10 @@ cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 cargo test --test financial_foundation -- --ignored
+cargo test --test category_management -- --ignored
+cargo test --test transaction_management -- --ignored
+cargo test --test transfer_management -- --ignored
+cargo test --test calculated_balance -- --ignored
 ```
 
 Les tests d'intégration utilisent exclusivement `beehive_vault_test`

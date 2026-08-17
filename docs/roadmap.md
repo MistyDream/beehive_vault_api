@@ -6,8 +6,8 @@ résultat utilisable, de PostgreSQL jusqu'à l'API ou à l'interface.
 ## État actuel
 
 - **Phase active :** phase 2 — Transactions manuelles ;
-- **Dernière étape terminée :** 2.4 — Transferts atomiques ;
-- **Prochaine étape :** 2.5 — Soldes calculés.
+- **Dernière étape terminée :** 2.5 — Soldes calculés ;
+- **Prochaine étape :** 2.6 — Flux mensuels.
 
 Légende :
 
@@ -109,7 +109,7 @@ patrimoine et obtenir un total consolidé par l'API.
 - supprimer logiquement le transfert et ses deux mouvements ;
 - tester les transferts entre comptes actifs et comptes de dette.
 
-### 2.5 — Soldes calculés ⬜
+### 2.5 — Soldes calculés ✅
 
 - partir du dernier solde de rapprochement de chaque compte ;
 - ajouter les transactions non supprimées strictement postérieures ;

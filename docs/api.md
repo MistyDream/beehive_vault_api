@@ -43,6 +43,16 @@ Une catégorie possède un `kind` égal à `income` ou `expense`. La liste accep
 
 Le corps de création contient `name`, `kind`, `currency`, `initialBalance` et `balanceDate`. `institutionId` est facultatif.
 
+Les réponses d'un compte distinguent :
+
+- `latestBalance`, le montant du rapprochement le plus récent ;
+- `balanceDate`, la date de ce rapprochement ;
+- `calculatedBalance`, ce montant augmenté des transactions non supprimées
+  strictement postérieures à `balanceDate`.
+
+Les transactions du jour du rapprochement sont considérées comme déjà incluses
+dans `latestBalance`.
+
 Le type peut changer au sein d'une même famille actif ou dette. Le passage entre
 ces deux familles est refusé dès que le compte possède une transaction, y
 compris supprimée logiquement.
@@ -83,4 +93,6 @@ deux mouvements.
 
 - `GET /v1/households/{household_id}/summary` retourne `assets`, `liabilities`, `netWorth` et `currency`.
 
-Le résumé utilise actuellement le dernier solde de chaque compte. Les transactions sont disponibles, mais leur prise en compte dans le solde calculé sera ajoutée à l'étape 2.5 de la feuille de route : le dernier solde de rapprochement sera alors augmenté des transactions strictement postérieures.
+Le résumé utilise `calculatedBalance` pour chaque compte actif. Le montant brut
+d'un compte de dette est inversé pour obtenir son effet économique, puis les
+valeurs sont réparties entre `assets`, `liabilities` et `netWorth`.

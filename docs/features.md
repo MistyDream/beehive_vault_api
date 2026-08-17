@@ -1,8 +1,6 @@
 # Catalogue des fonctionnalités
 
-Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en
-cours de développement et ce qui pourrait être ajouté. La
-[feuille de route](roadmap.md) reste la référence pour l'ordre de réalisation.
+Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cours de développement et ce qui pourrait être ajouté. La [feuille de route](roadmap.md) reste la référence pour l'ordre de réalisation.
 
 ## Statuts
 
@@ -20,8 +18,9 @@ cours de développement et ce qui pourrait être ajouté. La
 | Établissements | Création, liste, renommage et archivage | Pas de synchronisation avec les établissements réels |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
-| Soldes | Solde initial et soldes de rapprochement datés | Le solde calculé n'inclut pas encore les transactions postérieures |
-| Patrimoine | Total des actifs, dettes et patrimoine net | Calculé depuis le dernier solde de chaque compte |
+| Soldes | Solde initial et soldes de rapprochement datés | Le rapprochement le plus récent sert de point d'ancrage |
+| Soldes | Solde courant calculé | Ajoute les transactions non supprimées strictement postérieures au rapprochement |
+| Patrimoine | Total des actifs, dettes et patrimoine net | Calculé depuis les soldes courants des comptes actifs |
 | Catégories | Catalogue initial propre à chaque foyer | Pas de sous-catégories |
 | Catégories | Création, filtrage, renommage et archivage | Une catégorie possède une nature immuable |
 | Transactions | Création manuelle d'un revenu ou d'une dépense | Pas encore de création par import CSV |
@@ -32,15 +31,12 @@ cours de développement et ce qui pourrait être ajouté. La
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. La prochaine
-étape retenue est le calcul des soldes à partir des rapprochements et des
-transactions.
+Aucune fonctionnalité produit n'est actuellement en développement. La prochaine étape retenue est le calcul des revenus, dépenses et flux mensuels.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| 2.5 | Soldes calculés | Ajouter au dernier rapprochement les transactions postérieures |
 | 2.6 | Flux mensuels | Calculer revenus, dépenses et ventilation par catégorie |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
@@ -75,5 +71,4 @@ transactions.
 - fiscalité ;
 - analyses financières avancées.
 
-Une idée ne passe dans les fonctionnalités prévues qu'après une décision sur son
-périmètre et sa priorité.
+Une idée ne passe dans les fonctionnalités prévues qu'après une décision sur son périmètre et sa priorité.

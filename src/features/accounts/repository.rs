@@ -12,6 +12,28 @@ use super::domain::{
     Account, AccountKind, BalanceSnapshot, BalanceSource, NewAccount, NewBalanceSnapshot,
 };
 
+macro_rules! account_select {
+    ($suffix:literal) => {
+        concat!(
+            "SELECT a.id, a.household_id, a.institution_id, a.name, a.kind, a.currency, ",
+            "latest.amount AS latest_balance, latest.balance_date, ",
+            "COALESCE(latest.amount, 0::numeric) + COALESCE(activity.amount, 0::numeric) ",
+            "AS calculated_balance, a.archived_at, a.created_at, a.updated_at ",
+            "FROM accounts a ",
+            "LEFT JOIN LATERAL (",
+            "SELECT amount, balance_date FROM account_balance_snapshots ",
+            "WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1",
+            ") latest ON true ",
+            "LEFT JOIN LATERAL (",
+            "SELECT sum(amount) AS amount FROM transactions ",
+            "WHERE account_id = a.id AND deleted_at IS NULL ",
+            "AND (latest.balance_date IS NULL OR booking_date > latest.balance_date)",
+            ") activity ON true ",
+            $suffix
+        )
+    };
+}
+
 #[derive(Clone)]
 pub struct AccountRepository {
     database: Database,
@@ -33,6 +55,7 @@ struct AccountRow {
     currency: CurrencyCode,
     latest_balance: Option<AccountBalance>,
     balance_date: Option<NaiveDate>,
+    calculated_balance: AccountBalance,
     archived_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -52,6 +75,7 @@ impl TryFrom<AccountRow> for Account {
             currency: row.currency,
             latest_balance: row.latest_balance,
             balance_date: row.balance_date,
+            calculated_balance: row.calculated_balance,
             archived_at: row.archived_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -160,14 +184,9 @@ impl AccountRepository {
     }
 
     pub async fn list(&self, household_id: HouseholdId) -> Result<Vec<Account>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, AccountRow>(
-            "SELECT a.id, a.household_id, a.institution_id, a.name, a.kind, a.currency, \
-         latest.amount AS latest_balance, latest.balance_date, a.archived_at, \
-         a.created_at, a.updated_at FROM accounts a \
-         LEFT JOIN LATERAL (SELECT amount, balance_date FROM account_balance_snapshots \
-         WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1) latest ON true \
-         WHERE a.household_id = $1 AND a.archived_at IS NULL ORDER BY lower(a.name)",
-        )
+        let rows = sqlx::query_as::<_, AccountRow>(account_select!(
+            "WHERE a.household_id = $1 AND a.archived_at IS NULL ORDER BY lower(a.name)"
+        ))
         .bind(household_id)
         .fetch_all(self.database.pool())
         .await?;
@@ -179,14 +198,9 @@ impl AccountRepository {
         household_id: HouseholdId,
         account_id: AccountId,
     ) -> Result<Option<Account>, sqlx::Error> {
-        let row = sqlx::query_as::<_, AccountRow>(
-            "SELECT a.id, a.household_id, a.institution_id, a.name, a.kind, a.currency, \
-         latest.amount AS latest_balance, latest.balance_date, a.archived_at, \
-         a.created_at, a.updated_at FROM accounts a \
-         LEFT JOIN LATERAL (SELECT amount, balance_date FROM account_balance_snapshots \
-         WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1) latest ON true \
-         WHERE a.household_id = $1 AND a.id = $2 AND a.archived_at IS NULL",
-        )
+        let row = sqlx::query_as::<_, AccountRow>(account_select!(
+            "WHERE a.household_id = $1 AND a.id = $2 AND a.archived_at IS NULL"
+        ))
         .bind(household_id)
         .bind(account_id)
         .fetch_optional(self.database.pool())
@@ -199,14 +213,9 @@ impl AccountRepository {
         household_id: HouseholdId,
         account_id: AccountId,
     ) -> Result<Option<Account>, sqlx::Error> {
-        let row = sqlx::query_as::<_, AccountRow>(
-            "SELECT a.id, a.household_id, a.institution_id, a.name, a.kind, a.currency, \
-         latest.amount AS latest_balance, latest.balance_date, a.archived_at, \
-         a.created_at, a.updated_at FROM accounts a \
-         LEFT JOIN LATERAL (SELECT amount, balance_date FROM account_balance_snapshots \
-         WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1) latest ON true \
-         WHERE a.household_id = $1 AND a.id = $2",
-        )
+        let row = sqlx::query_as::<_, AccountRow>(account_select!(
+            "WHERE a.household_id = $1 AND a.id = $2"
+        ))
         .bind(household_id)
         .bind(account_id)
         .fetch_optional(self.database.pool())

@@ -114,6 +114,7 @@ pub struct Account {
     pub currency: CurrencyCode,
     pub latest_balance: Option<AccountBalance>,
     pub balance_date: Option<NaiveDate>,
+    pub calculated_balance: AccountBalance,
     pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

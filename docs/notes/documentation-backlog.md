@@ -19,17 +19,12 @@ MVP. Elle ne remplace ni la feuille de route produit ni les ADR.
 
 ## Documentation à resynchroniser
 
-- corriger le modèle métier : les montants bruts des deux mouvements d'un
-  transfert ne sont pas toujours opposés lorsque des comptes de dette sont
-  impliqués ; ce sont leurs effets économiques qui doivent s'annuler ;
 - distinguer dans le modèle métier les invariants déjà implémentés de ceux
   prévus pour l'import CSV, notamment la référence d'import et la clé de
   déduplication ;
 - mettre à jour l'arborescence de l'architecture avec les modules `categories`
   et `transactions` ;
-- mettre à jour l'état du projet dans le README ;
-- ajouter les tests d'intégration des catégories et transactions aux commandes
-  du guide de développement.
+- mettre à jour l'état du projet dans le README.
 
 ## Position de sécurité actuelle
 
