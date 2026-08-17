@@ -1,8 +1,6 @@
 # API du socle financier
 
-Toutes les routes métier sont préfixées par `/v1` et utilisent JSON. Les UUID
-sont générés par l'application et les montants décimaux sont transmis sous forme
-de chaînes afin de préserver leur précision.
+Toutes les routes métier sont préfixées par `/v1` et utilisent JSON. Les UUID sont générés par l'application et les montants décimaux sont transmis sous forme de chaînes afin de préserver leur précision.
 
 ## Foyers
 
@@ -24,37 +22,27 @@ de chaînes afin de préserver leur précision.
 - `DELETE /v1/households/{household_id}/categories/{category_id}` l'archive.
 
 La création d'un foyer crée atomiquement son catalogue initial de 19 catégories.
-Une catégorie possède un `kind` égal à `income` ou `expense`. La liste accepte le
-filtre facultatif `kind`. Le type d'une catégorie est immuable après sa création.
+Une catégorie possède un `kind` égal à `income` ou `expense`. La liste accepte le filtre facultatif `kind`. Le type d'une catégorie est immuable après sa création.
 
 ## Comptes
 
-- `POST /v1/households/{household_id}/accounts` crée un compte et son premier
-  solde de rapprochement dans une même transaction PostgreSQL ;
+- `POST /v1/households/{household_id}/accounts` crée un compte et son premier solde de rapprochement dans une même transaction PostgreSQL ;
 - `GET /v1/households/{household_id}/accounts` liste les comptes actifs ;
 - `GET /v1/households/{household_id}/accounts/{account_id}` consulte un compte ;
-- `PATCH /v1/households/{household_id}/accounts/{account_id}` modifie son nom,
-  son type ou son établissement ;
+- `PATCH /v1/households/{household_id}/accounts/{account_id}` modifie son nom, son type ou son établissement ;
 - `DELETE /v1/households/{household_id}/accounts/{account_id}` l'archive.
 
-Le corps de création contient `name`, `kind`, `currency`, `initialBalance` et
-`balanceDate`. `institutionId` est facultatif.
+Le corps de création contient `name`, `kind`, `currency`, `initialBalance` et `balanceDate`. `institutionId` est facultatif.
 
 ## Soldes de rapprochement
 
-- `POST /v1/households/{household_id}/accounts/{account_id}/balances` ajoute un
-  solde daté ;
-- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne
-  l'historique du plus récent au plus ancien.
+- `POST /v1/households/{household_id}/accounts/{account_id}/balances` ajoute un solde daté ;
+- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien.
 
-Les sources acceptées sont `manual`, `import`, `synchronization` et
-`reconciliation`.
+Les sources acceptées sont `manual`, `import`, `synchronization` et `reconciliation`.
 
 ## Patrimoine
 
-- `GET /v1/households/{household_id}/summary` retourne `assets`, `liabilities`,
-  `netWorth` et `currency`.
+- `GET /v1/households/{household_id}/summary` retourne `assets`, `liabilities`, `netWorth` et `currency`.
 
-Le résumé utilise actuellement le dernier solde de chaque compte. Lorsque les
-transactions seront introduites, un compte bancaire utilisera le dernier solde
-de rapprochement augmenté des transactions postérieures.
+Le résumé utilise actuellement le dernier solde de chaque compte. Les transactions sont disponibles, mais leur prise en compte dans le solde calculé sera ajoutée à l'étape 2.5 de la feuille de route : le dernier solde de rapprochement sera alors augmenté des transactions strictement postérieures.
