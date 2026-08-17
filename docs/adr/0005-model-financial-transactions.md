@@ -3,6 +3,10 @@
 - Statut : Accepté
 - Date : 2026-08-12
 
+La décision `limit/offset` de la section « Consultation et pagination » est
+remplacée par l'[ADR-0006](0006-page-based-pagination.md). Les autres décisions
+de cet ADR restent applicables.
+
 ## Contexte
 
 Le socle financier représente actuellement les comptes, les établissements et des soldes de rapprochement datés. La phase suivante doit permettre de saisir des revenus et dépenses, de catégoriser les flux, de représenter les transferts internes et de recalculer les soldes sans introduire plusieurs sources concurrentes de vérité.

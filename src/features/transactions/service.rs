@@ -7,7 +7,9 @@ use crate::{
         accounts::AccountRepository, categories::CategoryRepository,
         households::HouseholdRepository,
     },
+    pagination::Pagination,
     types::{AccountId, CategoryId, HouseholdId, TransactionId},
+    update::FieldUpdate,
 };
 
 use super::{
@@ -36,16 +38,7 @@ pub struct ListTransactionsCommand {
     pub category_id: Option<CategoryId>,
     pub source: Option<TransactionSource>,
     pub search: Option<String>,
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub enum FieldUpdate<T> {
-    #[default]
-    Unchanged,
-    Set(T),
-    Clear,
+    pub pagination: Pagination,
 }
 
 pub struct UpdateTransactionCommand {
@@ -180,19 +173,6 @@ impl TransactionService {
             ));
         }
 
-        let limit = command.limit.unwrap_or(50);
-        if !(1..=200).contains(&limit) {
-            return Err(ApiError::BadRequest(
-                "limit must contain a value between 1 and 200".to_owned(),
-            ));
-        }
-        let offset = command.offset.unwrap_or(0);
-        if offset < 0 {
-            return Err(ApiError::BadRequest(
-                "offset must be greater than or equal to zero".to_owned(),
-            ));
-        }
-
         let search = command.search.and_then(|search| {
             let search = search.trim();
             (!search.is_empty()).then(|| search.to_owned())
@@ -205,8 +185,7 @@ impl TransactionService {
             category_id: command.category_id,
             source: command.source,
             search,
-            limit,
-            offset,
+            pagination: command.pagination,
         };
 
         Ok(self

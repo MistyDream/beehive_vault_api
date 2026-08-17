@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 
 use crate::{
     database::Database,
+    pagination::Pagination,
     types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId},
 };
 
@@ -22,8 +23,7 @@ pub struct TransactionFilters {
     pub category_id: Option<CategoryId>,
     pub source: Option<TransactionSource>,
     pub search: Option<String>,
-    pub limit: i64,
-    pub offset: i64,
+    pub pagination: Pagination,
 }
 
 #[derive(Clone)]
@@ -118,8 +118,8 @@ impl TransactionRepository {
         .bind(filters.category_id)
         .bind(filters.source.map(TransactionSource::as_str))
         .bind(filters.search.as_deref())
-        .bind(filters.limit)
-        .bind(filters.offset)
+        .bind(filters.pagination.limit())
+        .bind(filters.pagination.offset())
         .fetch_all(self.database.pool())
         .await?;
 

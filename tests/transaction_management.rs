@@ -112,7 +112,7 @@ async fn household_transactions_can_be_managed() {
         &application,
         "GET",
         &format!(
-            "/v1/households/{household_id}/transactions?accountId={account_id}&nature=expense&search=grocery"
+            "/v1/households/{household_id}/transactions?accountId={account_id}&nature=expense&search=grocery&page=1&limit=1"
         ),
         Value::Null,
         StatusCode::OK,
@@ -218,7 +218,13 @@ async fn send_json(
         })
         .unwrap();
     let response = application.clone().oneshot(request).await.unwrap();
-    assert_eq!(response.status(), expected_status);
+    let status = response.status();
     let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    assert_eq!(
+        status,
+        expected_status,
+        "unexpected response body: {}",
+        String::from_utf8_lossy(&bytes)
+    );
     serde_json::from_slice(&bytes).unwrap_or(Value::Null)
 }

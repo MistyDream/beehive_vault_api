@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId};
 
+/// A non-zero signed amount representing a transaction's raw effect on an account balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TransactionAmount(Decimal);
 

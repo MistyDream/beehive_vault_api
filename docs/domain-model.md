@@ -38,6 +38,12 @@ Dans le MVP, les comptes consolidés utilisent la devise principale du foyer. La
 
 Un solde positif augmente le patrimoine pour un actif et représente une somme due pour une dette. Cette convention devra être rendue explicite dans le code et l'interface.
 
+Le type d'un compte peut évoluer au sein de la même famille, par exemple de
+compte courant vers épargne ou de carte de crédit vers prêt. Le passage entre
+un actif et une dette reste possible tant qu'aucune transaction n'existe. Il est
+ensuite interdit, y compris lorsque les transactions sont supprimées
+logiquement, car il inverserait leur interprétation économique historique.
+
 ## Établissement financier
 
 Un établissement regroupe les comptes ouverts auprès d'un même organisme. Il
@@ -74,6 +80,20 @@ Cette règle est identique pour toutes les transactions stockées.
 Un transfert relie deux transactions opposées appartenant à deux comptes du même foyer. Il déplace la valeur sans créer de revenu ni de dépense au niveau consolidé.
 
 Les deux mouvements restent visibles dans chaque compte. Leur lien garantit que les tableaux de bord peuvent les exclure des flux de consommation.
+
+Le montant nominal d'un transfert et le montant d'une transaction possèdent des
+sémantiques différentes :
+
+- `TransferAmount` est strictement positif et représente la valeur absolue
+  saisie par l'utilisateur ;
+- `TransactionAmount` est signé, positif ou négatif mais jamais nul, et
+  représente l'effet brut d'un mouvement sur le solde de son compte.
+
+Un `TransferAmount` produit donc deux `TransactionAmount`. Leur signe est dérivé
+du rôle source ou destination et du fait que le compte représente un actif ou
+une dette. Les montants bruts ne sont pas nécessairement opposés lorsque des
+comptes de dette sont impliqués ; ce sont leurs effets économiques qui doivent
+s'annuler.
 
 ## Catégorie
 

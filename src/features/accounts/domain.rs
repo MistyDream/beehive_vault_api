@@ -32,8 +32,7 @@ impl AccountKind {
         }
     }
 
-    #[cfg(test)]
-    pub fn is_liability(self) -> bool {
+    pub const fn is_liability(self) -> bool {
         matches!(self, Self::CreditCard | Self::Loan | Self::OtherLiability)
     }
 }

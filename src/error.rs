@@ -5,6 +5,8 @@ use axum::{
 };
 use serde::Serialize;
 
+use crate::pagination::PaginationError;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("{0}")]
@@ -15,6 +17,12 @@ pub enum ApiError {
     Conflict(String),
     #[error("database operation failed")]
     Database(#[from] sqlx::Error),
+}
+
+impl From<PaginationError> for ApiError {
+    fn from(error: PaginationError) -> Self {
+        Self::BadRequest(error.to_string())
+    }
 }
 
 #[derive(Serialize)]

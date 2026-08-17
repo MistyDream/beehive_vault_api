@@ -32,7 +32,7 @@ pub(super) async fn list(
     Path(household_id): Path<HouseholdId>,
     Query(query): Query<ListTransactionsQuery>,
 ) -> Result<Json<Vec<TransactionResponse>>, ApiError> {
-    let transactions = module.service.list(household_id, query.into()).await?;
+    let transactions = module.service.list(household_id, query.try_into()?).await?;
 
     Ok(Json(transactions.into_iter().map(Into::into).collect()))
 }

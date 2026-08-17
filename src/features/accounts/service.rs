@@ -110,6 +110,20 @@ impl AccountService {
         account_id: AccountId,
         command: UpdateAccountCommand,
     ) -> Result<Account, ApiError> {
+        if let Some(kind) = command.kind {
+            let current = self.get(household_id, account_id).await?;
+            if kind.is_liability() != current.kind.is_liability()
+                && self
+                    .repository
+                    .has_transactions(household_id, account_id)
+                    .await?
+            {
+                return Err(ApiError::Conflict(
+                    "account cannot switch between asset and liability after transactions exist"
+                        .to_owned(),
+                ));
+            }
+        }
         let name = command
             .name
             .map(|name| required_text(name, "name"))

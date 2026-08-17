@@ -13,6 +13,7 @@ use crate::database::Database;
 
 use service::AccountService;
 
+pub(crate) use domain::{Account, AccountKind};
 pub(crate) use repository::AccountRepository;
 
 #[derive(Clone)]

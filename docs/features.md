@@ -25,19 +25,21 @@ cours de développement et ce qui pourrait être ajouté. La
 | Catégories | Catalogue initial propre à chaque foyer | Pas de sous-catégories |
 | Catégories | Création, filtrage, renommage et archivage | Une catégorie possède une nature immuable |
 | Transactions | Création manuelle d'un revenu ou d'une dépense | Pas encore de création par import CSV |
-| Transactions | Consultation, filtres et pagination | Pagination par limite et offset |
-| Transactions | Modification et suppression logique | Les mouvements de transfert nécessiteront leur API dédiée |
+| Transactions | Consultation, filtres et pagination | Page 1 et limite 50 par défaut, limite maximale de 200 |
+| Transactions | Modification et suppression logique | Les mouvements de transfert sont protégés des modifications isolées |
+| Transferts | Création et consultation des deux mouvements liés | Les montants signés sont calculés selon les types de comptes |
+| Transferts | Modification et suppression atomiques | Les deux mouvements sont toujours traités ensemble |
 
 ## En développement
 
 Aucune fonctionnalité produit n'est actuellement en développement. La prochaine
-étape retenue est la gestion des transferts atomiques.
+étape retenue est le calcul des soldes à partir des rapprochements et des
+transactions.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| 2.4 | Transferts atomiques | Créer, modifier et supprimer ensemble les deux mouvements liés |
 | 2.5 | Soldes calculés | Ajouter au dernier rapprochement les transactions postérieures |
 | 2.6 | Flux mensuels | Calculer revenus, dépenses et ventilation par catégorie |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |

@@ -1,14 +1,16 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
-use crate::types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId};
+use crate::{
+    pagination::{Pagination, PaginationError, PaginationQuery},
+    types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId},
+    update::FieldUpdate,
+};
 
 use super::{
     domain::{Transaction, TransactionNature, TransactionSource, TransferRole},
-    service::{
-        CreateTransactionCommand, FieldUpdate, ListTransactionsCommand, UpdateTransactionCommand,
-    },
+    service::{CreateTransactionCommand, ListTransactionsCommand, UpdateTransactionCommand},
 };
 
 #[derive(Deserialize)]
@@ -47,13 +49,15 @@ pub struct ListTransactionsQuery {
     category_id: Option<CategoryId>,
     source: Option<TransactionSource>,
     search: Option<String>,
-    limit: Option<i64>,
-    offset: Option<i64>,
+    #[serde(flatten)]
+    pagination: PaginationQuery,
 }
 
-impl From<ListTransactionsQuery> for ListTransactionsCommand {
-    fn from(query: ListTransactionsQuery) -> Self {
-        Self {
+impl TryFrom<ListTransactionsQuery> for ListTransactionsCommand {
+    type Error = PaginationError;
+
+    fn try_from(query: ListTransactionsQuery) -> Result<Self, Self::Error> {
+        Ok(Self {
             account_id: query.account_id,
             date_from: query.date_from,
             date_to: query.date_to,
@@ -61,9 +65,8 @@ impl From<ListTransactionsQuery> for ListTransactionsCommand {
             category_id: query.category_id,
             source: query.source,
             search: query.search,
-            limit: query.limit,
-            offset: query.offset,
-        }
+            pagination: Pagination::try_from(query.pagination)?,
+        })
     }
 }
 
@@ -75,9 +78,9 @@ pub struct UpdateTransactionRequest {
     label: Option<String>,
     amount: Option<Decimal>,
     nature: Option<TransactionNature>,
-    #[serde(default, deserialize_with = "deserialize_field_update")]
+    #[serde(default)]
     category_id: FieldUpdate<CategoryId>,
-    #[serde(default, deserialize_with = "deserialize_field_update")]
+    #[serde(default)]
     note: FieldUpdate<String>,
 }
 
@@ -93,17 +96,6 @@ impl From<UpdateTransactionRequest> for UpdateTransactionCommand {
             note: request.note,
         }
     }
-}
-
-fn deserialize_field_update<'de, D, T>(deserializer: D) -> Result<FieldUpdate<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer).map(|value| match value {
-        Some(value) => FieldUpdate::Set(value),
-        None => FieldUpdate::Clear,
-    })
 }
 
 #[derive(Serialize)]

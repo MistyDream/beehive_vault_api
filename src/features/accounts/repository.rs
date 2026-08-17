@@ -194,6 +194,41 @@ impl AccountRepository {
         row.map(Account::try_from).transpose()
     }
 
+    pub async fn find_including_archived(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+    ) -> Result<Option<Account>, sqlx::Error> {
+        let row = sqlx::query_as::<_, AccountRow>(
+            "SELECT a.id, a.household_id, a.institution_id, a.name, a.kind, a.currency, \
+         latest.amount AS latest_balance, latest.balance_date, a.archived_at, \
+         a.created_at, a.updated_at FROM accounts a \
+         LEFT JOIN LATERAL (SELECT amount, balance_date FROM account_balance_snapshots \
+         WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1) latest ON true \
+         WHERE a.household_id = $1 AND a.id = $2",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_optional(self.database.pool())
+        .await?;
+        row.map(Account::try_from).transpose()
+    }
+
+    pub async fn has_transactions(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM transactions \
+             WHERE household_id = $1 AND account_id = $2)",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_one(self.database.pool())
+        .await
+    }
+
     pub async fn update(
         &self,
         household_id: HouseholdId,

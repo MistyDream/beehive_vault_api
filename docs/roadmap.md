@@ -6,8 +6,8 @@ résultat utilisable, de PostgreSQL jusqu'à l'API ou à l'interface.
 ## État actuel
 
 - **Phase active :** phase 2 — Transactions manuelles ;
-- **Dernière étape terminée :** 2.3 — Transactions ordinaires ;
-- **Prochaine étape :** 2.4 — Transferts atomiques.
+- **Dernière étape terminée :** 2.4 — Transferts atomiques ;
+- **Prochaine étape :** 2.5 — Soldes calculés.
 
 Légende :
 
@@ -100,7 +100,7 @@ patrimoine et obtenir un total consolidé par l'API.
 - protéger les mouvements de transfert et les champs bancaires importés ;
 - couvrir les règles par des tests unitaires et un test d'intégration PostgreSQL.
 
-### 2.4 — Transferts atomiques ⬜
+### 2.4 — Transferts atomiques ✅
 
 - créer un transfert et ses deux mouvements dans une transaction PostgreSQL ;
 - calculer le signe de chaque mouvement selon le rôle du compte ;
