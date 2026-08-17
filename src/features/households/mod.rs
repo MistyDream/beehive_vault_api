@@ -8,8 +8,9 @@ use axum::{Router, routing::post};
 
 use crate::database::Database;
 
-use repository::HouseholdRepository;
 use service::HouseholdService;
+
+pub(crate) use repository::HouseholdRepository;
 
 #[derive(Clone)]
 pub(crate) struct HouseholdsModule {

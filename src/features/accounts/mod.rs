@@ -11,8 +11,9 @@ use axum::{
 
 use crate::database::Database;
 
-use repository::AccountRepository;
 use service::AccountService;
+
+pub(crate) use repository::AccountRepository;
 
 #[derive(Clone)]
 pub(crate) struct AccountsModule {

@@ -50,6 +50,7 @@ uuid_id!(AccountId);
 uuid_id!(BalanceSnapshotId);
 uuid_id!(CategoryId);
 uuid_id!(TransactionId);
+uuid_id!(TransferId);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, sqlx::Type)]
 #[serde(transparent)]
