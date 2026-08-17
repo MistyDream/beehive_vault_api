@@ -4,10 +4,7 @@ Toutes les routes métier sont préfixées par `/v1` et utilisent JSON. Les UUID
 
 ## Pagination
 
-Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et
-vaut 1 par défaut. `limit` vaut 50 par défaut et accepte une valeur comprise
-entre 1 et 200. L'offset PostgreSQL est calculé en interne et n'appartient pas
-au contrat HTTP.
+Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et vaut 1 par défaut. `limit` vaut 50 par défaut et accepte une valeur comprise entre 1 et 200. L'offset PostgreSQL est calculé en interne et n'appartient pas au contrat HTTP.
 
 Le nombre total d'éléments n'est pas retourné systématiquement.
 
@@ -47,15 +44,11 @@ Les réponses d'un compte distinguent :
 
 - `latestBalance`, le montant du rapprochement le plus récent ;
 - `balanceDate`, la date de ce rapprochement ;
-- `calculatedBalance`, ce montant augmenté des transactions non supprimées
-  strictement postérieures à `balanceDate`.
+- `calculatedBalance`, ce montant augmenté des transactions non supprimées strictement postérieures à `balanceDate`.
 
-Les transactions du jour du rapprochement sont considérées comme déjà incluses
-dans `latestBalance`.
+Les transactions du jour du rapprochement sont considérées comme déjà incluses dans `latestBalance`.
 
-Le type peut changer au sein d'une même famille actif ou dette. Le passage entre
-ces deux familles est refusé dès que le compte possède une transaction, y
-compris supprimée logiquement.
+Le type peut changer au sein d'une même famille actif ou dette. Le passage entre ces deux familles est refusé dès que le compte possède une transaction, y compris supprimée logiquement.
 
 ## Soldes de rapprochement
 
@@ -72,9 +65,7 @@ Les sources acceptées sont `manual`, `import`, `synchronization` et `reconcilia
 - `PATCH /v1/households/{household_id}/transactions/{transaction_id}` modifie un mouvement ordinaire ;
 - `DELETE /v1/households/{household_id}/transactions/{transaction_id}` le supprime logiquement.
 
-La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`,
-`source`, `search`, `page` et `limit`. Les mouvements d'un transfert apparaissent
-dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
+La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`, `uncategorized`, `source`, `search`, `page` et `limit`. `uncategorized=true` sélectionne les revenus et dépenses sans catégorie, exclut les transferts et ne peut pas être combiné avec `categoryId`. Les mouvements d'un transfert apparaissent dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
 
 ## Transferts
 
@@ -84,15 +75,20 @@ dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
 - `PATCH /v1/households/{household_id}/transfers/{transfer_id}` modifie atomiquement ses deux mouvements ;
 - `DELETE /v1/households/{household_id}/transfers/{transfer_id}` supprime logiquement l'ensemble.
 
-Le montant nominal est strictement positif. Les montants signés des deux
-mouvements sont calculés selon leurs rôles et selon que chaque compte représente
-un actif ou une dette. Les dates, libellés et notes peuvent différer entre les
-deux mouvements.
+Le montant nominal est strictement positif. Les montants signés des deux mouvements sont calculés selon leurs rôles et selon que chaque compte représente un actif ou une dette. Les dates, libellés et notes peuvent différer entre les deux mouvements.
 
 ## Patrimoine
 
 - `GET /v1/households/{household_id}/summary` retourne `assets`, `liabilities`, `netWorth` et `currency`.
 
-Le résumé utilise `calculatedBalance` pour chaque compte actif. Le montant brut
-d'un compte de dette est inversé pour obtenir son effet économique, puis les
-valeurs sont réparties entre `assets`, `liabilities` et `netWorth`.
+Le résumé utilise `calculatedBalance` pour chaque compte actif. Le montant brut d'un compte de dette est inversé pour obtenir son effet économique, puis les valeurs sont réparties entre `assets`, `liabilities` et `netWorth`.
+
+## Flux mensuels
+
+- `GET /v1/households/{household_id}/monthly-flows/{month}` retourne le rapport d'un mois civil, où `month` respecte le format `YYYY-MM`.
+
+Le rapport expose les bornes du mois, la devise du foyer, les revenus, les dépenses et le flux net. Les revenus et dépenses contiennent chacun un total, un nombre de transactions et une ventilation par catégorie. Une catégorie nulle représente le groupe virtuel « Non catégorisé ».
+
+L'effet économique inverse le montant brut des transactions portées par un compte de dette. Les remboursements et corrections conservent leur signe et peuvent donc réduire le total d'une section ou d'une catégorie. Les transferts et les transactions supprimées sont exclus. Les comptes et catégories archivés restent inclus dans l'historique.
+
+Les transactions sources d'un total sont consultées avec la collection des transactions et les mêmes bornes, nature et catégorie. Le filtre `uncategorized=true` permet de retrouver les sources du groupe sans catégorie.

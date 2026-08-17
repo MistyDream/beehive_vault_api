@@ -6,8 +6,7 @@
 - PostgreSQL 18 ;
 - les outils clients `psql`, `createdb` et `pg_isready`.
 
-PostgreSQL 18.4 est utilisé pour le développement local. Une version mineure
-plus récente de PostgreSQL 18 peut être adoptée sans changer le schéma du projet.
+PostgreSQL 18.4 est utilisé pour le développement local. Une version mineure plus récente de PostgreSQL 18 peut être adoptée sans changer le schéma du projet.
 
 ## Préparer PostgreSQL
 
@@ -24,13 +23,9 @@ Le script est réentrant. Il crée, si nécessaire :
 - la base d'intégration `beehive_vault_test` ;
 - une configuration UTC pour les deux bases.
 
-Par défaut, le script se connecte à `127.0.0.1:5432` avec l'utilisateur du
-système. Ces valeurs peuvent être adaptées avec `BEEHIVE_DB_HOST`,
-`BEEHIVE_DB_PORT`, `BEEHIVE_DB_ADMIN_DATABASE` et `BEEHIVE_DB_ADMIN_USER`.
+Par défaut, le script se connecte à `127.0.0.1:5432` avec l'utilisateur du système. Ces valeurs peuvent être adaptées avec `BEEHIVE_DB_HOST`, `BEEHIVE_DB_PORT`, `BEEHIVE_DB_ADMIN_DATABASE` et `BEEHIVE_DB_ADMIN_USER`.
 
-Le cluster Homebrew local accepte actuellement les connexions de localhost sans
-mot de passe. Cette configuration est réservée au développement. Un déploiement
-distant doit utiliser un secret distinct et une authentification PostgreSQL.
+Le cluster Homebrew local accepte actuellement les connexions de localhost sans mot de passe. Cette configuration est réservée au développement. Un déploiement distant doit utiliser un secret distinct et une authentification PostgreSQL.
 
 ## Configurer l'API
 
@@ -52,8 +47,7 @@ DATABASE_URL=postgres://beehive_vault@127.0.0.1:5432/beehive_vault
 cargo run
 ```
 
-L'application applique les migrations SQLx en attente avant d'ouvrir le serveur
-HTTP. Les routes techniques sont ensuite disponibles :
+L'application applique les migrations SQLx en attente avant d'ouvrir le serveur HTTP. Les routes techniques sont ensuite disponibles :
 
 - `GET http://127.0.0.1:8080/healthz` vérifie le processus ;
 - `GET http://127.0.0.1:8080/readyz` vérifie PostgreSQL.
@@ -70,7 +64,7 @@ cargo test --test category_management -- --ignored
 cargo test --test transaction_management -- --ignored
 cargo test --test transfer_management -- --ignored
 cargo test --test calculated_balance -- --ignored
+cargo test --test monthly_flows -- --ignored
 ```
 
-Les tests d'intégration utilisent exclusivement `beehive_vault_test`
-afin de ne jamais modifier les données de développement.
+Les tests d'intégration utilisent exclusivement `beehive_vault_test` afin de ne jamais modifier les données de développement.

@@ -4,7 +4,8 @@ use sqlx::PgPool;
 use crate::{
     database::Database,
     features::{
-        accounts, categories, health, households, institutions, net_worth, transactions, transfers,
+        accounts, categories, health, households, institutions, monthly_flows, net_worth,
+        transactions, transfers,
     },
 };
 
@@ -15,6 +16,7 @@ pub fn build(pool: PgPool) -> Router {
     let health = health::configure(database.clone());
     let households = households::configure(database.clone());
     let institutions = institutions::configure(database.clone());
+    let monthly_flows = monthly_flows::configure(database.clone());
     let net_worth = net_worth::configure(database.clone());
     let transactions = transactions::configure(database.clone());
     let transfers = transfers::configure(database);
@@ -24,6 +26,7 @@ pub fn build(pool: PgPool) -> Router {
         .merge(categories::routes(categories))
         .merge(households::routes(households))
         .merge(institutions::routes(institutions))
+        .merge(monthly_flows::routes(monthly_flows))
         .merge(net_worth::routes(net_worth))
         .merge(transactions::routes(transactions))
         .merge(transfers::routes(transfers));

@@ -5,9 +5,9 @@ résultat utilisable, de PostgreSQL jusqu'à l'API ou à l'interface.
 
 ## État actuel
 
-- **Phase active :** phase 2 — Transactions manuelles ;
-- **Dernière étape terminée :** 2.5 — Soldes calculés ;
-- **Prochaine étape :** 2.6 — Flux mensuels.
+- **Phase active :** phase 3 — Import CSV ;
+- **Dernière étape terminée :** 2.6 — Flux mensuels ;
+- **Prochaine étape :** 3.1 — Configuration et prévisualisation.
 
 Légende :
 
@@ -71,7 +71,7 @@ prise en compte des transactions postérieures appartient à l'étape 2.5.
 **Résultat :** l'utilisateur peut représenter la photographie actuelle de son
 patrimoine et obtenir un total consolidé par l'API.
 
-## Phase 2 — Transactions manuelles 🚧
+## Phase 2 — Transactions manuelles ✅
 
 ### 2.1 — Conception et stockage ✅
 
@@ -116,7 +116,7 @@ patrimoine et obtenir un total consolidé par l'API.
 - exposer le solde calculé de chaque compte ;
 - recalculer les actifs, les dettes et le patrimoine net.
 
-### 2.6 — Flux mensuels ⬜
+### 2.6 — Flux mensuels ✅
 
 - calculer les revenus et dépenses selon le type du compte ;
 - exclure les transferts des revenus et dépenses ;

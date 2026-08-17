@@ -28,16 +28,17 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Transactions | Modification et suppression logique | Les mouvements de transfert sont protégés des modifications isolées |
 | Transferts | Création et consultation des deux mouvements liés | Les montants signés sont calculés selon les types de comptes |
 | Transferts | Modification et suppression atomiques | Les deux mouvements sont toujours traités ensemble |
+| Flux mensuels | Revenus, dépenses, flux net et ventilation par catégorie | Un rapport porte sur un seul mois civil |
+| Flux mensuels | Accès aux transactions sources de chaque total | Réutilise la liste paginée des transactions et ses filtres |
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. La prochaine étape retenue est le calcul des revenus, dépenses et flux mensuels.
+Aucune fonctionnalité produit n'est actuellement en développement. La prochaine étape retenue est la configuration et la prévisualisation des imports CSV.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| 2.6 | Flux mensuels | Calculer revenus, dépenses et ventilation par catégorie |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |

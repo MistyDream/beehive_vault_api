@@ -47,6 +47,8 @@ pub struct ListTransactionsQuery {
     date_to: Option<NaiveDate>,
     nature: Option<TransactionNature>,
     category_id: Option<CategoryId>,
+    #[serde(default)]
+    uncategorized: bool,
     source: Option<TransactionSource>,
     search: Option<String>,
     #[serde(flatten)]
@@ -63,6 +65,7 @@ impl TryFrom<ListTransactionsQuery> for ListTransactionsCommand {
             date_to: query.date_to,
             nature: query.nature,
             category_id: query.category_id,
+            uncategorized: query.uncategorized,
             source: query.source,
             search: query.search,
             pagination: Pagination::try_from(query.pagination)?,

@@ -36,6 +36,7 @@ pub struct ListTransactionsCommand {
     pub date_to: Option<NaiveDate>,
     pub nature: Option<TransactionNature>,
     pub category_id: Option<CategoryId>,
+    pub uncategorized: bool,
     pub source: Option<TransactionSource>,
     pub search: Option<String>,
     pub pagination: Pagination,
@@ -172,6 +173,11 @@ impl TransactionService {
                 "dateFrom must be before or equal to dateTo".to_owned(),
             ));
         }
+        if command.uncategorized && command.category_id.is_some() {
+            return Err(ApiError::BadRequest(
+                "uncategorized cannot be combined with categoryId".to_owned(),
+            ));
+        }
 
         let search = command.search.and_then(|search| {
             let search = search.trim();
@@ -183,6 +189,7 @@ impl TransactionService {
             date_to: command.date_to,
             nature: command.nature,
             category_id: command.category_id,
+            uncategorized: command.uncategorized,
             source: command.source,
             search,
             pagination: command.pagination,

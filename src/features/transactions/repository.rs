@@ -21,6 +21,7 @@ pub struct TransactionFilters {
     pub date_to: Option<NaiveDate>,
     pub nature: Option<TransactionNature>,
     pub category_id: Option<CategoryId>,
+    pub uncategorized: bool,
     pub source: Option<TransactionSource>,
     pub search: Option<String>,
     pub pagination: Pagination,
@@ -103,12 +104,13 @@ impl TransactionRepository {
                AND ($4::date IS NULL OR booking_date <= $4) \
                AND ($5::text IS NULL OR nature = $5) \
                AND ($6::uuid IS NULL OR category_id = $6) \
-               AND ($7::text IS NULL OR source = $7) \
-               AND ($8::text IS NULL \
-                    OR strpos(lower(label), lower($8)) > 0 \
-                    OR strpos(lower(COALESCE(note, '')), lower($8)) > 0) \
+               AND (NOT $7 OR (category_id IS NULL AND nature <> 'transfer')) \
+               AND ($8::text IS NULL OR source = $8) \
+               AND ($9::text IS NULL \
+                    OR strpos(lower(label), lower($9)) > 0 \
+                    OR strpos(lower(COALESCE(note, '')), lower($9)) > 0) \
              ORDER BY booking_date DESC, created_at DESC, id DESC \
-             LIMIT $9 OFFSET $10",
+             LIMIT $10 OFFSET $11",
         )
         .bind(household_id)
         .bind(filters.account_id)
@@ -116,6 +118,7 @@ impl TransactionRepository {
         .bind(filters.date_to)
         .bind(filters.nature.map(TransactionNature::as_str))
         .bind(filters.category_id)
+        .bind(filters.uncategorized)
         .bind(filters.source.map(TransactionSource::as_str))
         .bind(filters.search.as_deref())
         .bind(filters.pagination.limit())
