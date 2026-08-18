@@ -22,3 +22,4 @@ ADR est créé et référence celui qu'il remplace afin de préserver l'historiq
 - [ADR-0004 — Composer explicitement les modules Axum](0004-explicit-module-composition.md)
 - [ADR-0005 — Modéliser les flux financiers par des transactions signées](0005-model-financial-transactions.md)
 - [ADR-0006 — Exposer une pagination par page](0006-page-based-pagination.md)
+- [ADR-0007 — Standardiser les erreurs HTTP avec RFC 9457](0007-rfc-9457-problem-details.md)

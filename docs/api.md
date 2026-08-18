@@ -8,6 +8,12 @@ Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et v
 
 Le nombre total d'éléments n'est pas retourné systématiquement.
 
+## Erreurs
+
+L'API retourne actuellement les erreurs sous la forme JSON `{ code, message }`.
+L'[ADR-0007](adr/0007-rfc-9457-problem-details.md) retient leur migration vers le format Problem Details de la RFC 9457 avec le type de contenu `application/problem+json`. Cette migration doit être implémentée avant que le
+nouveau client web dépende de ce contrat.
+
 ## Foyers
 
 - `POST /v1/households` crée un foyer financier ;
