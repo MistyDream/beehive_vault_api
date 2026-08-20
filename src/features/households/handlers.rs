@@ -19,6 +19,13 @@ pub(super) async fn create(
     Ok((StatusCode::CREATED, Json(household.into())))
 }
 
+pub(super) async fn list(
+    State(module): State<HouseholdsModule>,
+) -> Result<Json<Vec<HouseholdResponse>>, ApiError> {
+    let households = module.service.list().await?;
+    Ok(Json(households.into_iter().map(Into::into).collect()))
+}
+
 pub(super) async fn get(
     State(module): State<HouseholdsModule>,
     Path(household_id): Path<HouseholdId>,

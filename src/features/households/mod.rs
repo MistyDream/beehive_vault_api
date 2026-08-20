@@ -4,7 +4,7 @@ mod handlers;
 mod repository;
 mod service;
 
-use axum::{Router, routing::post};
+use axum::{Router, routing::get};
 
 use crate::database::Database;
 
@@ -26,10 +26,7 @@ pub(crate) fn configure(database: Database) -> HouseholdsModule {
 
 pub(crate) fn routes(module: HouseholdsModule) -> Router {
     Router::new()
-        .route("/households", post(handlers::create))
-        .route(
-            "/households/{household_id}",
-            axum::routing::get(handlers::get),
-        )
+        .route("/households", get(handlers::list).post(handlers::create))
+        .route("/households/{household_id}", get(handlers::get))
         .with_state(module)
 }

@@ -14,7 +14,7 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Domaine | Fonctionnalité | Limites actuelles |
 |---|---|---|
 | Technique | Vérification de vivacité et de disponibilité de PostgreSQL | API locale sans authentification |
-| Foyer | Création et consultation individuelle d'un foyer financier | Un seul utilisateur, sans invitations ni permissions |
+| Foyer | Création, liste et consultation individuelle des foyers financiers | Un seul utilisateur, sans invitations ni permissions |
 | Établissements | Création, liste, renommage et archivage par foyer | Modèle actuel à remplacer par le catalogue global de l'ADR-0008 |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
@@ -39,7 +39,6 @@ Aucune fonctionnalité produit n'est actuellement en développement. La prochain
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Prérequis client | Liste des foyers | Retrouver et sélectionner les foyers indépendants de l'utilisateur |
 | Prérequis client | Problem Details RFC 9457 | Fournir des erreurs stables et exploitables par les formulaires |
 | Prérequis client | Catalogue global d'établissements | Fournir une référence facultative et cohérente aux comptes |
 | Prérequis client | Contrats des transactions | Fournir pagination progressive, effet économique, précision monétaire et résumés de transfert sans calcul métier dans le navigateur |

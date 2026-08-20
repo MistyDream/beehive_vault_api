@@ -59,6 +59,16 @@ impl HouseholdRepository {
         .await?;
         row.map(Household::try_from).transpose()
     }
+
+    pub async fn list(&self) -> Result<Vec<Household>, sqlx::Error> {
+        let rows = sqlx::query_as::<_, HouseholdRow>(
+            "SELECT id, name, base_currency, timezone, created_at, updated_at \
+             FROM households ORDER BY lower(name), created_at, id",
+        )
+        .fetch_all(self.database.pool())
+        .await?;
+        rows.into_iter().map(Household::try_from).collect()
+    }
 }
 
 #[derive(sqlx::FromRow)]

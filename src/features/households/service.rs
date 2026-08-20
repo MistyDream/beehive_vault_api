@@ -35,6 +35,10 @@ impl HouseholdService {
         Ok(self.repository.create(household).await?)
     }
 
+    pub async fn list(&self) -> Result<Vec<Household>, ApiError> {
+        Ok(self.repository.list().await?)
+    }
+
     pub async fn get(&self, household_id: HouseholdId) -> Result<Household, ApiError> {
         self.repository
             .find(household_id)

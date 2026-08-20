@@ -59,6 +59,7 @@ cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
+cargo test --test household_listing -- --ignored
 cargo test --test financial_foundation -- --ignored
 cargo test --test category_management -- --ignored
 cargo test --test transaction_management -- --ignored

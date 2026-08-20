@@ -19,7 +19,12 @@ nouveau client web dépende de ce contrat.
 ## Foyers
 
 - `POST /v1/households` crée un foyer financier ;
+- `GET /v1/households` liste les foyers disponibles ;
 - `GET /v1/households/{household_id}` consulte un foyer.
+
+La liste n'est pas paginée afin que le client puisse résoudre le foyer actif en une seule requête. Elle retourne un tableau JSON, vide lorsqu'aucun foyer n'existe, ordonné par nom sans distinction de casse, puis par date de création et identifiant.
+
+L'API ne possède pas encore d'authentification ni d'autorisation : la liste contient donc actuellement tous les foyers de l'installation locale. Une future autorisation limitera cette même collection aux foyers accessibles à l'utilisateur authentifié.
 
 ## Établissements
 
