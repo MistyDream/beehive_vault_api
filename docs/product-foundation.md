@@ -15,7 +15,9 @@ Le premier utilisateur est le créateur du projet. Le produit privilégie donc :
 - une interface compréhensible plutôt qu'une configuration exhaustive ;
 - la maîtrise et la confidentialité des données financières.
 
-Le modèle prévoit un **foyer financier** pouvant contenir plusieurs membres, mais le premier MVP ne développe ni invitation ni gestion avancée des droits.
+Le même utilisateur peut gérer plusieurs **foyers financiers** indépendants. Le
+modèle prévoit qu'un foyer puisse contenir plusieurs membres à terme, mais le
+premier MVP ne développe ni invitation ni gestion avancée des droits.
 
 ## Problème à résoudre en premier
 
@@ -43,7 +45,7 @@ Le MVP permet de représenter tous les comptes d'un foyer, d'enregistrer ou d'im
 
 ### Inclus
 
-- créer un foyer financier initial ;
+- créer et sélectionner plusieurs foyers financiers indépendants ;
 - créer, modifier, archiver et consulter des comptes ;
 - gérer les principaux types de comptes, actifs et dettes ;
 - saisir manuellement des transactions ;
@@ -72,7 +74,7 @@ Ces exclusions sont des reports, pas des abandons.
 
 ## Parcours principal
 
-1. L'utilisateur crée son foyer financier.
+1. L'utilisateur crée ou sélectionne son foyer financier.
 2. Il ajoute ses comptes courants, d'épargne, d'investissement ou de crédit.
 3. Il renseigne un solde initial.
 4. Il saisit quelques transactions ou importe un relevé CSV.

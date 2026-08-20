@@ -14,7 +14,7 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Domaine | Fonctionnalité | Limites actuelles |
 |---|---|---|
 | Technique | Vérification de vivacité et de disponibilité de PostgreSQL | API locale sans authentification |
-| Foyer | Création et consultation d'un foyer financier | Un seul utilisateur, sans invitations ni permissions |
+| Foyer | Création et consultation individuelle d'un foyer financier | Un seul utilisateur, sans invitations ni permissions |
 | Établissements | Création, liste, renommage et archivage | Pas de synchronisation avec les établissements réels |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
@@ -39,6 +39,7 @@ Aucune fonctionnalité produit n'est actuellement en développement. La prochain
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
+| Web 1.1 | Liste des foyers | Retrouver et sélectionner les foyers indépendants de l'utilisateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |
@@ -71,5 +72,34 @@ Aucune fonctionnalité produit n'est actuellement en développement. La prochain
 - suivi immobilier et détaillé des crédits ;
 - fiscalité ;
 - analyses financières avancées.
+
+## Synchronisation bancaire différée
+
+Le MVP conserve l'ajout manuel des comptes et des transactions. L'import CSV
+constitue la première automatisation prévue afin de valider la qualité des
+données, la prévisualisation et la déduplication avant d'introduire une
+intégration externe.
+
+Une évolution ultérieure pourra s'appuyer sur un prestataire d'agrégation
+bancaire pour récupérer, après consentement de l'utilisateur, les comptes, leurs
+soldes et leurs transactions. Cette synchronisation complétera toujours l'ajout
+manuel, nécessaire pour les espèces, les établissements non pris en charge et
+certains comptes d'investissement ou de dette.
+
+Cette évolution devra traiter explicitement :
+
+- l'identité de l'utilisateur auprès du prestataire et le rattachement de chaque
+  connexion à un foyer ;
+- les identifiants externes et l'idempotence des synchronisations ;
+- la distinction entre soldes bancaires, soldes de rapprochement et soldes
+  calculés par Beehive Vault ;
+- les transactions ajoutées, modifiées ou supprimées par la banque ;
+- les erreurs de synchronisation, les webhooks et le renouvellement du
+  consentement bancaire ;
+- la conservation des secrets et appels au prestataire exclusivement côté
+  serveur.
+
+La connexion bancaire ne déplacera jamais d'argent. Elle restera une source de
+données importées dont Beehive Vault maîtrise la normalisation et la traçabilité.
 
 Une idée ne passe dans les fonctionnalités prévues qu'après une décision sur son périmètre et sa priorité.

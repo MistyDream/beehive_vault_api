@@ -14,8 +14,10 @@ Informations minimales :
 - devise principale ;
 - fuseau horaire.
 
-Le MVP crée un seul foyer et un seul membre. Le rattachement des données au foyer
-évite une migration structurelle lorsque le partage sera introduit.
+Le MVP reste limité à un seul utilisateur, mais celui-ci peut créer plusieurs
+foyers financiers indépendants. Chaque donnée appartient à un seul foyer. Cette
+frontière évite une migration structurelle lorsque les membres et le partage
+seront introduits.
 
 ## Compte
 
