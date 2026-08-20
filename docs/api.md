@@ -91,6 +91,7 @@ La conception Web de la liste, du détail et des formulaires met en évidence le
 - enrichir un mouvement de transfert avec le compte opposé et les informations nécessaires à un résumé « compte source → compte destination » ;
 - rendre résolubles les libellés des comptes et catégories archivés encore référencés par les transactions historiques ;
 - définir une sémantique de saisie qui accepte un montant nominal compréhensible tout en préservant les remboursements et corrections de signe inverse ;
+- stabiliser la précision maximale acceptée et affichable pour chaque devise sans demander au client de convertir les décimaux en nombres binaires ;
 - stabiliser une métadonnée d'icône pour les catégories si le catalogue doit porter ce choix, le client conservant dans tous les cas une icône neutre de repli.
 
 Le choix entre des résumés incorporés aux réponses et des référentiels incluant les éléments archivés reste ouvert. Il devra éviter les appels supplémentaires par transaction et ne pas faire dépendre l'affichage historique d'un libellé courant introuvable.
