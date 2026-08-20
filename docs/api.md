@@ -8,6 +8,8 @@ Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et v
 
 Le nombre total d'éléments n'est pas retourné systématiquement.
 
+Le nouveau client Web utilisera un chargement explicite « Afficher plus » sans afficher le nombre total. Avant son intégration, les collections concernées doivent néanmoins indiquer si une page suivante existe, avec `hasMore` ou une information équivalente. Le format commun de cette métadonnée reste à stabiliser.
+
 ## Erreurs
 
 L'API retourne actuellement les erreurs sous la forme JSON `{ code, message }`.
@@ -77,6 +79,21 @@ Les sources acceptées sont `manual`, `import`, `synchronization` et `reconcilia
 - `DELETE /v1/households/{household_id}/transactions/{transaction_id}` le supprime logiquement.
 
 La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`, `uncategorized`, `source`, `search`, `page` et `limit`. `uncategorized=true` sélectionne les revenus et dépenses sans catégorie, exclut les transferts et ne peut pas être combiné avec `categoryId`. Les mouvements d'un transfert apparaissent dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
+
+Le champ `amount` actuellement exposé représente le montant signé stocké sur le compte. Cette représentation reste le contrat effectif tant que le contrat de saisie du nouveau client Web n'est pas stabilisé.
+
+### Besoins du nouveau client Web
+
+La conception Web de la liste, du détail et des formulaires met en évidence les évolutions suivantes, qui ne sont pas encore implémentées :
+
+- accompagner la pagination d'une information indiquant l'existence d'une page suivante, sans rendre le total obligatoire ;
+- exposer l'effet économique affichable d'un mouvement sans demander au client de recalculer les règles propres aux comptes d'actif et de dette ;
+- enrichir un mouvement de transfert avec le compte opposé et les informations nécessaires à un résumé « compte source → compte destination » ;
+- rendre résolubles les libellés des comptes et catégories archivés encore référencés par les transactions historiques ;
+- définir une sémantique de saisie qui accepte un montant nominal compréhensible tout en préservant les remboursements et corrections de signe inverse ;
+- stabiliser une métadonnée d'icône pour les catégories si le catalogue doit porter ce choix, le client conservant dans tous les cas une icône neutre de repli.
+
+Le choix entre des résumés incorporés aux réponses et des référentiels incluant les éléments archivés reste ouvert. Il devra éviter les appels supplémentaires par transaction et ne pas faire dépendre l'affichage historique d'un libellé courant introuvable.
 
 ## Transferts
 

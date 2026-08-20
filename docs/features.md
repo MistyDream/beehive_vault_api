@@ -39,8 +39,10 @@ Aucune fonctionnalité produit n'est actuellement en développement. La prochain
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Web 1.1 | Liste des foyers | Retrouver et sélectionner les foyers indépendants de l'utilisateur |
-| Web 1.3 | Catalogue global d'établissements | Fournir une référence facultative et cohérente aux comptes |
+| Prérequis client | Liste des foyers | Retrouver et sélectionner les foyers indépendants de l'utilisateur |
+| Prérequis client | Problem Details RFC 9457 | Fournir des erreurs stables et exploitables par les formulaires |
+| Prérequis client | Catalogue global d'établissements | Fournir une référence facultative et cohérente aux comptes |
+| Prérequis client | Contrats de lecture des transactions | Fournir pagination progressive, effet économique et résumés de transfert sans calcul métier dans le navigateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |
