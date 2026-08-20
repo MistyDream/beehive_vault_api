@@ -14,10 +14,7 @@ Informations minimales :
 - devise principale ;
 - fuseau horaire.
 
-Le MVP reste limité à un seul utilisateur, mais celui-ci peut créer plusieurs
-foyers financiers indépendants. Chaque donnée appartient à un seul foyer. Cette
-frontière évite une migration structurelle lorsque les membres et le partage
-seront introduits.
+Le MVP reste limité à un seul utilisateur, mais celui-ci peut créer plusieurs foyers financiers indépendants. Chaque donnée appartient à un seul foyer. Cette frontière évite une migration structurelle lorsque les membres et le partage seront introduits.
 
 ## Compte
 
@@ -48,9 +45,9 @@ logiquement, car il inverserait leur interprétation économique historique.
 
 ## Établissement financier
 
-Un établissement regroupe les comptes ouverts auprès d'un même organisme. Il
-appartient au foyer, mais son rattachement à un compte reste facultatif afin de
-représenter des espèces ou des actifs détenus sans intermédiaire.
+Un établissement regroupe les comptes ouverts auprès d'un même organisme. Les établissements forment un catalogue global configuré côté serveur. Leur rattachement à un compte reste facultatif afin de représenter des espèces, un organisme absent du catalogue ou des actifs détenus sans intermédiaire.
+
+Un établissement référencé ne représente pas une connexion bancaire. Les connexions consenties par un utilisateur et les correspondances avec des prestataires de synchronisation appartiendront à des modèles séparés.
 
 ## Solde de rapprochement
 

@@ -15,7 +15,7 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 |---|---|---|
 | Technique | Vérification de vivacité et de disponibilité de PostgreSQL | API locale sans authentification |
 | Foyer | Création et consultation individuelle d'un foyer financier | Un seul utilisateur, sans invitations ni permissions |
-| Établissements | Création, liste, renommage et archivage | Pas de synchronisation avec les établissements réels |
+| Établissements | Création, liste, renommage et archivage par foyer | Modèle actuel à remplacer par le catalogue global de l'ADR-0008 |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
 | Soldes | Solde initial et soldes de rapprochement datés | Le rapprochement le plus récent sert de point d'ancrage |
@@ -40,6 +40,7 @@ Aucune fonctionnalité produit n'est actuellement en développement. La prochain
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
 | Web 1.1 | Liste des foyers | Retrouver et sélectionner les foyers indépendants de l'utilisateur |
+| Web 1.3 | Catalogue global d'établissements | Fournir une référence facultative et cohérente aux comptes |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |

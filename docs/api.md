@@ -21,10 +21,15 @@ nouveau client web dépende de ce contrat.
 
 ## Établissements
 
+Le contrat actuellement implémenté reste :
+
 - `POST /v1/households/{household_id}/institutions` crée un établissement ;
 - `GET /v1/households/{household_id}/institutions` liste les établissements ;
 - `PATCH /v1/households/{household_id}/institutions/{institution_id}` le renomme ;
 - `DELETE /v1/households/{household_id}/institutions/{institution_id}` l'archive.
+
+L'[ADR-0008](adr/0008-global-financial-institution-catalog.md) remplace ce modèle par un catalogue global configuré côté serveur et exposé à terme avec `GET /v1/institutions`. Cette migration doit précéder l'intégration des comptes
+par le nouveau client web.
 
 ## Catégories
 
