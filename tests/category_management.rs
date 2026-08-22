@@ -60,7 +60,7 @@ async fn household_categories_can_be_managed() {
     .await;
     let category_id = category["id"].as_str().unwrap();
 
-    send_json(
+    let duplicate_problem = send_json(
         &application,
         "POST",
         &format!("/v1/households/{household_id}/categories"),
@@ -68,6 +68,12 @@ async fn household_categories_can_be_managed() {
         StatusCode::CONFLICT,
     )
     .await;
+    assert_eq!(duplicate_problem["code"], "duplicate_category_name");
+    assert_eq!(
+        duplicate_problem["type"],
+        "urn:beehive-vault:problem:duplicate-category-name"
+    );
+    assert!(duplicate_problem.get("detail").is_none());
 
     let renamed_category = send_json(
         &application,
@@ -82,7 +88,7 @@ async fn household_categories_can_be_managed() {
 
     let other_household = create_household(&application, "Other household").await;
     let other_household_id = other_household["id"].as_str().unwrap();
-    send_json(
+    let not_found_problem = send_json(
         &application,
         "PATCH",
         &format!("/v1/households/{other_household_id}/categories/{category_id}"),
@@ -90,6 +96,7 @@ async fn household_categories_can_be_managed() {
         StatusCode::NOT_FOUND,
     )
     .await;
+    assert_eq!(not_found_problem["code"], "category_not_found");
 
     send_json(
         &application,
@@ -153,6 +160,12 @@ async fn send_json(
         .unwrap();
     let response = application.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), expected_status);
+    if expected_status.is_client_error() || expected_status.is_server_error() {
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/problem+json"
+        );
+    }
     let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     serde_json::from_slice(&bytes).unwrap_or(Value::Null)
 }

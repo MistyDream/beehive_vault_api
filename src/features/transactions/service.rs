@@ -2,7 +2,7 @@ use chrono::{NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
-    error::ApiError,
+    error::{ApiError, ProblemKind},
     features::{
         accounts::AccountRepository, categories::CategoryRepository,
         households::HouseholdRepository,
@@ -93,20 +93,26 @@ impl TransactionService {
         command: CreateTransactionCommand,
     ) -> Result<Transaction, ApiError> {
         if command.nature == TransactionNature::Transfer {
-            return Err(ApiError::BadRequest(
-                "transfers must be created through the transfer endpoint".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/nature",
+                "transfer_endpoint_required",
+                "transfers must be created through the transfer endpoint",
             ));
         }
 
-        let label = TransactionLabel::new(command.label)
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
-        let amount = TransactionAmount::new(command.amount)
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        let label = TransactionLabel::new(command.label).map_err(|error| {
+            ApiError::body_validation("#/label", "invalid_length", error.to_string())
+        })?;
+        let amount = TransactionAmount::new(command.amount).map_err(|error| {
+            ApiError::body_validation("#/amount", "zero_amount", error.to_string())
+        })?;
         let note = command
             .note
             .map(TransactionNote::new)
             .transpose()
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+            .map_err(|error| {
+                ApiError::body_validation("#/note", "invalid_length", error.to_string())
+            })?;
 
         self.validate_booking_date(household_id, command.booking_date)
             .await?;
@@ -149,7 +155,7 @@ impl TransactionService {
         self.transaction_repository
             .find(household_id, transaction_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Transaction not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))
     }
 
     pub async fn list(
@@ -163,19 +169,23 @@ impl TransactionService {
             .await?
             .is_none()
         {
-            return Err(ApiError::NotFound("Household not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::HouseholdNotFound));
         }
         if matches!(
             (command.date_from, command.date_to),
             (Some(date_from), Some(date_to)) if date_from > date_to
         ) {
-            return Err(ApiError::BadRequest(
-                "dateFrom must be before or equal to dateTo".to_owned(),
+            return Err(ApiError::query_validation(
+                "#/dateFrom",
+                "invalid_date_range",
+                "dateFrom must be before or equal to dateTo",
             ));
         }
         if command.uncategorized && command.category_id.is_some() {
-            return Err(ApiError::BadRequest(
-                "uncategorized cannot be combined with categoryId".to_owned(),
+            return Err(ApiError::query_validation(
+                "#/uncategorized",
+                "incompatible_filters",
+                "uncategorized cannot be combined with categoryId",
             ));
         }
 
@@ -209,9 +219,8 @@ impl TransactionService {
     ) -> Result<Transaction, ApiError> {
         let transaction = self.get(household_id, transaction_id).await?;
         if matches!(transaction.details, TransactionDetails::Transfer { .. }) {
-            return Err(ApiError::Conflict(
-                "transfer movements must be updated through the transfer endpoint".to_owned(),
-            ));
+            return Err(ApiError::new(ProblemKind::TransferMovementUpdateForbidden)
+                .with_detail("Transfer movements must be updated through the transfer endpoint."));
         }
         if command.is_empty() {
             return Ok(transaction);
@@ -222,9 +231,10 @@ impl TransactionService {
                 || command.label.is_some()
                 || command.amount.is_some())
         {
-            return Err(ApiError::Conflict(
-                "imported transaction bank fields cannot be modified".to_owned(),
-            ));
+            return Err(
+                ApiError::new(ProblemKind::ImportedTransactionFieldsImmutable)
+                    .with_detail("Imported transaction bank fields cannot be modified."),
+            );
         }
 
         let account_was_updated = command.account_id.is_some();
@@ -236,18 +246,24 @@ impl TransactionService {
             .label
             .map(TransactionLabel::new)
             .transpose()
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?
+            .map_err(|error| {
+                ApiError::body_validation("#/label", "invalid_length", error.to_string())
+            })?
             .unwrap_or(transaction.label);
         let amount = command
             .amount
             .map(TransactionAmount::new)
             .transpose()
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?
+            .map_err(|error| {
+                ApiError::body_validation("#/amount", "zero_amount", error.to_string())
+            })?
             .unwrap_or(transaction.amount);
         let nature = command.nature.unwrap_or(current_nature);
         if nature == TransactionNature::Transfer {
-            return Err(ApiError::BadRequest(
-                "a regular transaction cannot become a transfer".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/nature",
+                "transfer_endpoint_required",
+                "a regular transaction cannot become a transfer",
             ));
         }
         let category_id = match command.category_id {
@@ -257,10 +273,9 @@ impl TransactionService {
         };
         let note = match command.note {
             FieldUpdate::Unchanged => transaction.note,
-            FieldUpdate::Set(note) => Some(
-                TransactionNote::new(note)
-                    .map_err(|error| ApiError::BadRequest(error.to_string()))?,
-            ),
+            FieldUpdate::Set(note) => Some(TransactionNote::new(note).map_err(|error| {
+                ApiError::body_validation("#/note", "invalid_length", error.to_string())
+            })?),
             FieldUpdate::Clear => None,
         };
 
@@ -291,7 +306,7 @@ impl TransactionService {
                 note,
             })
             .await?
-            .ok_or_else(|| ApiError::NotFound("Transaction not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))
     }
 
     pub async fn delete(
@@ -301,9 +316,8 @@ impl TransactionService {
     ) -> Result<(), ApiError> {
         let transaction = self.get(household_id, transaction_id).await?;
         if matches!(transaction.details, TransactionDetails::Transfer { .. }) {
-            return Err(ApiError::Conflict(
-                "transfer movements must be deleted through the transfer endpoint".to_owned(),
-            ));
+            return Err(ApiError::new(ProblemKind::TransferMovementDeleteForbidden)
+                .with_detail("Transfer movements must be deleted through the transfer endpoint."));
         }
         if self
             .transaction_repository
@@ -311,7 +325,7 @@ impl TransactionService {
             .await?
             == 0
         {
-            return Err(ApiError::NotFound("Transaction not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::TransactionNotFound));
         }
 
         Ok(())
@@ -331,13 +345,17 @@ impl TransactionService {
             .find(household_id, category_id)
             .await?
             .ok_or_else(|| {
-                ApiError::BadRequest(
-                    "category must be active and belong to the household".to_owned(),
+                ApiError::body_validation(
+                    "#/categoryId",
+                    "invalid_category",
+                    "category must be active and belong to the household",
                 )
             })?;
         if category.kind.as_str() != nature.as_str() {
-            return Err(ApiError::BadRequest(
-                "category kind must match transaction nature".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/categoryId",
+                "category_kind_mismatch",
+                "category kind must match transaction nature",
             ));
         }
 
@@ -353,14 +371,16 @@ impl TransactionService {
             .household_repository
             .find(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
         let current_date = household
             .timezone
             .date_at(Utc::now())
-            .map_err(|error| ApiError::Database(sqlx::Error::Decode(Box::new(error))))?;
+            .map_err(|error| ApiError::from(sqlx::Error::Decode(Box::new(error))))?;
         if booking_date > current_date {
-            return Err(ApiError::BadRequest(
-                "transaction booking date must not be in the future".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/bookingDate",
+                "date_in_future",
+                "transaction booking date must not be in the future",
             ));
         }
 
@@ -378,8 +398,10 @@ impl TransactionService {
             .await?
             .is_none()
         {
-            return Err(ApiError::BadRequest(
-                "account must be active and belong to the household".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/accountId",
+                "invalid_account",
+                "account must be active and belong to the household",
             ));
         }
 

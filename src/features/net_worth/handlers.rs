@@ -1,11 +1,9 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-};
+use axum::{Json, extract::State};
 use serde::Serialize;
 
 use crate::{
     error::ApiError,
+    extract::ApiPath,
     types::{AccountBalance, CurrencyCode, HouseholdId},
 };
 
@@ -33,7 +31,7 @@ impl From<NetWorthSummary> for NetWorthResponse {
 
 pub(super) async fn summary(
     State(module): State<NetWorthModule>,
-    Path(household_id): Path<HouseholdId>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
 ) -> Result<Json<NetWorthResponse>, ApiError> {
     Ok(Json(module.service.summary(household_id).await?.into()))
 }

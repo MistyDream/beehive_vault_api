@@ -142,7 +142,7 @@ async fn household_transfers_can_be_managed_atomically() {
         "GET",
         &format!("/v1/households/{household_id}/transfers?page=0"),
         Value::Null,
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
 
@@ -201,7 +201,7 @@ async fn household_transfers_can_be_managed_atomically() {
         "POST",
         &format!("/v1/households/{household_id}/transfers"),
         transfer_body(&savings_id, &savings_id, "Invalid same account"),
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
     send_json(
@@ -221,7 +221,7 @@ async fn household_transfers_can_be_managed_atomically() {
                 "label": "Future destination"
             }
         }),
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
 

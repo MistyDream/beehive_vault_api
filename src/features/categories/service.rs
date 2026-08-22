@@ -1,5 +1,5 @@
 use crate::{
-    error::ApiError,
+    error::{ApiError, ProblemKind},
     types::{CategoryId, HouseholdId},
 };
 
@@ -64,7 +64,7 @@ impl CategoryService {
         self.repository
             .update_name(household_id, category_id, &name)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Category not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::CategoryNotFound))
     }
 
     pub async fn archive(
@@ -73,19 +73,20 @@ impl CategoryService {
         category_id: CategoryId,
     ) -> Result<(), ApiError> {
         if self.repository.archive(household_id, category_id).await? == 0 {
-            return Err(ApiError::NotFound("Category not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::CategoryNotFound));
         }
         Ok(())
     }
 
     async fn ensure_household_exists(&self, household_id: HouseholdId) -> Result<(), ApiError> {
         if !self.repository.household_exists(household_id).await? {
-            return Err(ApiError::NotFound("Household not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::HouseholdNotFound));
         }
         Ok(())
     }
 }
 
 fn category_name(value: String) -> Result<CategoryName, ApiError> {
-    CategoryName::new(value).map_err(|error| ApiError::BadRequest(error.to_string()))
+    CategoryName::new(value)
+        .map_err(|error| ApiError::body_validation("#/name", "invalid_length", error.to_string()))
 }

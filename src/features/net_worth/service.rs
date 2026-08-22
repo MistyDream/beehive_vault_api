@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 
 use crate::{
-    error::ApiError,
+    error::{ApiError, ProblemKind},
     features::accounts::AccountRepository,
     types::{AccountBalance, HouseholdId},
 };
@@ -23,7 +23,7 @@ impl NetWorthService {
             .account_repository
             .household_currency(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
         let accounts = self.account_repository.list(household_id).await?;
         let mut assets = Decimal::ZERO;
         let mut liabilities = Decimal::ZERO;

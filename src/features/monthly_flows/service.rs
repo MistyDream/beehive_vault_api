@@ -1,5 +1,5 @@
 use crate::{
-    error::ApiError,
+    error::{ApiError, ProblemKind},
     features::{households::HouseholdRepository, transactions::domain::TransactionNature},
     types::HouseholdId,
 };
@@ -35,7 +35,7 @@ impl MonthlyFlowService {
             .household_repository
             .find(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
         let groups = self
             .repository
             .groups(

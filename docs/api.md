@@ -12,9 +12,67 @@ Le nouveau client Web utilisera un chargement explicite « Afficher plus » sans
 
 ## Erreurs
 
-L'API retourne actuellement les erreurs sous la forme JSON `{ code, message }`.
-L'[ADR-0007](adr/0007-rfc-9457-problem-details.md) retient leur migration vers le format Problem Details de la RFC 9457 avec le type de contenu `application/problem+json`. Cette migration doit être implémentée avant que le
-nouveau client web dépende de ce contrat.
+Les routes métier retournent leurs erreurs au format Problem Details de la RFC 9457 avec le type de contenu `application/problem+json`. Les routes techniques `/healthz` et `/readyz` conservent leur représentation dédiée.
+
+Chaque réponse contient :
+
+- `type`, l'identité canonique et stable du problème sous la forme `urn:beehive-vault:problem:<type>` ;
+- `title`, son résumé stable en anglais ;
+- `status`, identique au statut HTTP ;
+- `code`, une extension stable en `snake_case` qui simplifie le routage côté client ;
+- `detail`, uniquement lorsqu'une explication sûre et utile existe pour cette occurrence ;
+- `errors`, uniquement pour détailler une ou plusieurs valeurs invalides.
+
+`instance` est omis tant que l'API ne produit pas d'identifiant d'occurrence exploitable. Le client utilise `type` comme identité canonique, peut utiliser `code` comme raccourci et n'interprète jamais `title` ou `detail` comme des identifiants.
+
+Chaque entrée de `errors` contient `location` (`body`, `path` ou `query`), `pointer` sous forme de fragment JSON Pointer, `code` et `detail`. Par exemple :
+
+```json
+{
+  "type": "urn:beehive-vault:problem:validation-error",
+  "title": "Request validation failed",
+  "status": 422,
+  "detail": "One or more request values are invalid.",
+  "code": "validation_error",
+  "errors": [
+    {
+      "location": "body",
+      "pointer": "#/baseCurrency",
+      "code": "invalid_value",
+      "detail": "The value has an invalid format or type."
+    }
+  ]
+}
+```
+
+Un JSON mal formé ou un paramètre de chemin illisible produit `400`. Une valeur bien formée mais invalide sémantiquement produit `422`. Les ressources absentes produisent `404`, y compris lorsqu'un foyer parent d'une collection imbriquée n'existe pas. Les conflits métier produisent `409`, un type de contenu non pris en charge `415`, un corps trop volumineux `413`, une méthode non prise en charge `405` et une route inconnue `404`.
+
+Le catalogue stable des problèmes généraux et métier est le suivant. La valeur complète de `type` s'obtient en préfixant son suffixe par `urn:beehive-vault:problem:`.
+
+| Statut | Suffixe de `type` | `code` |
+| ---: | --- | --- |
+| 400 | `invalid-request` | `invalid_request` |
+| 404 | `route-not-found` | `route_not_found` |
+| 404 | `household-not-found` | `household_not_found` |
+| 404 | `institution-not-found` | `institution_not_found` |
+| 404 | `account-not-found` | `account_not_found` |
+| 404 | `category-not-found` | `category_not_found` |
+| 404 | `transaction-not-found` | `transaction_not_found` |
+| 404 | `transfer-not-found` | `transfer_not_found` |
+| 405 | `method-not-allowed` | `method_not_allowed` |
+| 409 | `duplicate-institution-name` | `duplicate_institution_name` |
+| 409 | `duplicate-category-name` | `duplicate_category_name` |
+| 409 | `duplicate-balance-date` | `duplicate_balance_date` |
+| 409 | `account-kind-change-forbidden` | `account_kind_change_forbidden` |
+| 409 | `transfer-movement-update-forbidden` | `transfer_movement_update_forbidden` |
+| 409 | `transfer-movement-delete-forbidden` | `transfer_movement_delete_forbidden` |
+| 409 | `imported-transaction-fields-immutable` | `imported_transaction_fields_immutable` |
+| 413 | `payload-too-large` | `payload_too_large` |
+| 415 | `unsupported-media-type` | `unsupported_media_type` |
+| 422 | `validation-error` | `validation_error` |
+| 500 | `internal-error` | `internal_error` |
+
+Les corps JSON ignorent les membres inconnus afin de préserver la compatibilité ascendante. Les détails SQL et autres informations internes ne sont jamais exposés. Le catalogue et les principes de stabilité sont définis dans l'[ADR-0007](adr/0007-rfc-9457-problem-details.md).
 
 ## Foyers
 

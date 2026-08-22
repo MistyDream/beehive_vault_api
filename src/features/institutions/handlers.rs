@@ -1,13 +1,10 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::{ApiError, required_text},
+    error::{ApiError, ProblemKind, required_text},
+    extract::{ApiJson, ApiPath},
     types::{HouseholdId, InstitutionId},
 };
 
@@ -36,9 +33,10 @@ pub(super) struct InstitutionResponse {
 
 pub(super) async fn create(
     State(module): State<InstitutionsModule>,
-    Path(household_id): Path<HouseholdId>,
-    Json(request): Json<CreateInstitutionRequest>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
+    ApiJson(request): ApiJson<CreateInstitutionRequest>,
 ) -> Result<(StatusCode, Json<InstitutionResponse>), ApiError> {
+    ensure_household_exists(&module, household_id).await?;
     let name = required_text(request.name, "name")?;
     let institution = sqlx::query_as::<_, InstitutionResponse>(
         "INSERT INTO institutions (id, household_id, name) VALUES ($1, $2, $3) \
@@ -54,8 +52,9 @@ pub(super) async fn create(
 
 pub(super) async fn list(
     State(module): State<InstitutionsModule>,
-    Path(household_id): Path<HouseholdId>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
 ) -> Result<Json<Vec<InstitutionResponse>>, ApiError> {
+    ensure_household_exists(&module, household_id).await?;
     let institutions = sqlx::query_as::<_, InstitutionResponse>(
         "SELECT id, household_id, name, archived_at, created_at, updated_at \
          FROM institutions WHERE household_id = $1 AND archived_at IS NULL ORDER BY lower(name)",
@@ -68,8 +67,8 @@ pub(super) async fn list(
 
 pub(super) async fn update(
     State(module): State<InstitutionsModule>,
-    Path((household_id, institution_id)): Path<(HouseholdId, InstitutionId)>,
-    Json(request): Json<UpdateInstitutionRequest>,
+    ApiPath((household_id, institution_id)): ApiPath<(HouseholdId, InstitutionId)>,
+    ApiJson(request): ApiJson<UpdateInstitutionRequest>,
 ) -> Result<Json<InstitutionResponse>, ApiError> {
     let name = required_text(request.name, "name")?;
     let institution = sqlx::query_as::<_, InstitutionResponse>(
@@ -82,13 +81,13 @@ pub(super) async fn update(
     .bind(name)
     .fetch_optional(module.database.pool())
     .await?
-    .ok_or_else(|| ApiError::NotFound("Institution not found".to_owned()))?;
+    .ok_or_else(|| ApiError::new(ProblemKind::InstitutionNotFound))?;
     Ok(Json(institution))
 }
 
 pub(super) async fn archive(
     State(module): State<InstitutionsModule>,
-    Path((household_id, institution_id)): Path<(HouseholdId, InstitutionId)>,
+    ApiPath((household_id, institution_id)): ApiPath<(HouseholdId, InstitutionId)>,
 ) -> Result<StatusCode, ApiError> {
     let result = sqlx::query(
         "UPDATE institutions SET archived_at = now(), updated_at = now() \
@@ -99,7 +98,21 @@ pub(super) async fn archive(
     .execute(module.database.pool())
     .await?;
     if result.rows_affected() == 0 {
-        return Err(ApiError::NotFound("Institution not found".to_owned()));
+        return Err(ApiError::new(ProblemKind::InstitutionNotFound));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn ensure_household_exists(
+    module: &InstitutionsModule,
+    household_id: HouseholdId,
+) -> Result<(), ApiError> {
+    let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM households WHERE id = $1)")
+        .bind(household_id)
+        .fetch_one(module.database.pool())
+        .await?;
+    if !exists {
+        return Err(ApiError::new(ProblemKind::HouseholdNotFound));
+    }
+    Ok(())
 }

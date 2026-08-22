@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 
 use crate::{
-    error::{ApiError, required_text},
+    error::{ApiError, ProblemKind, required_text},
     types::{
         AccountBalance, AccountId, BalanceSnapshotId, CurrencyCode, HouseholdId, InstitutionId,
     },
@@ -56,11 +56,13 @@ impl AccountService {
             .repository
             .household_currency(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
         if command.currency != household_currency {
-            return Err(ApiError::BadRequest(format!(
-                "account currency must match household currency {household_currency}"
-            )));
+            return Err(ApiError::body_validation(
+                "#/currency",
+                "account_currency_mismatch",
+                format!("account currency must match household currency {household_currency}"),
+            ));
         }
         self.validate_institution(household_id, command.institution_id)
             .await?;
@@ -90,6 +92,14 @@ impl AccountService {
     }
 
     pub async fn list(&self, household_id: HouseholdId) -> Result<Vec<Account>, ApiError> {
+        if self
+            .repository
+            .household_currency(household_id)
+            .await?
+            .is_none()
+        {
+            return Err(ApiError::new(ProblemKind::HouseholdNotFound));
+        }
         Ok(self.repository.list(household_id).await?)
     }
 
@@ -101,7 +111,7 @@ impl AccountService {
         self.repository
             .find(household_id, account_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Account not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))
     }
 
     pub async fn update(
@@ -118,10 +128,11 @@ impl AccountService {
                     .has_transactions(household_id, account_id)
                     .await?
             {
-                return Err(ApiError::Conflict(
-                    "account cannot switch between asset and liability after transactions exist"
-                        .to_owned(),
-                ));
+                return Err(
+                    ApiError::new(ProblemKind::AccountKindChangeForbidden).with_detail(
+                        "An account with transactions cannot switch between asset and liability.",
+                    ),
+                );
             }
         }
         let name = command
@@ -144,7 +155,7 @@ impl AccountService {
             )
             .await?;
         if affected == 0 {
-            return Err(ApiError::NotFound("Account not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::AccountNotFound));
         }
         self.get(household_id, account_id).await
     }
@@ -155,7 +166,7 @@ impl AccountService {
         account_id: AccountId,
     ) -> Result<(), ApiError> {
         if self.repository.archive(household_id, account_id).await? == 0 {
-            return Err(ApiError::NotFound("Account not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::AccountNotFound));
         }
         Ok(())
     }
@@ -201,8 +212,10 @@ impl AccountService {
             .active_institution_exists(household_id, institution_id)
             .await?
         {
-            return Err(ApiError::BadRequest(
-                "institution does not belong to the household".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/institutionId",
+                "invalid_institution",
+                "institution must be active and belong to the household",
             ));
         }
         Ok(())

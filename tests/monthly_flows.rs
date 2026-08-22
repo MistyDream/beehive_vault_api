@@ -260,7 +260,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
             "/v1/households/{household_id}/transactions?categoryId={food_category_id}&uncategorized=true"
         ),
         Value::Null,
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
 
@@ -287,7 +287,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         "GET",
         &format!("/v1/households/{household_id}/monthly-flows/2026-8"),
         Value::Null,
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
     send_json(

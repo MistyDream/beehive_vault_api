@@ -1,10 +1,10 @@
-use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 
-use crate::{error::ApiError, types::HouseholdId};
+use crate::{
+    error::ApiError,
+    extract::{ApiJson, ApiPath},
+    types::HouseholdId,
+};
 
 use super::{
     HouseholdsModule,
@@ -13,7 +13,7 @@ use super::{
 
 pub(super) async fn create(
     State(module): State<HouseholdsModule>,
-    Json(request): Json<CreateHouseholdRequest>,
+    ApiJson(request): ApiJson<CreateHouseholdRequest>,
 ) -> Result<(StatusCode, Json<HouseholdResponse>), ApiError> {
     let household = module.service.create(request.into()).await?;
     Ok((StatusCode::CREATED, Json(household.into())))
@@ -28,7 +28,7 @@ pub(super) async fn list(
 
 pub(super) async fn get(
     State(module): State<HouseholdsModule>,
-    Path(household_id): Path<HouseholdId>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
 ) -> Result<Json<HouseholdResponse>, ApiError> {
     let household = module.service.get(household_id).await?;
     Ok(Json(household.into()))

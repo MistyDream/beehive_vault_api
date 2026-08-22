@@ -1,5 +1,5 @@
 use crate::{
-    error::{ApiError, required_text},
+    error::{ApiError, ProblemKind, required_text},
     types::{CurrencyCode, HouseholdId, TimeZoneId},
 };
 
@@ -29,8 +29,9 @@ impl HouseholdService {
             id: HouseholdId::new(),
             name: required_text(command.name, "name")?,
             base_currency: command.base_currency,
-            timezone: TimeZoneId::new(command.timezone)
-                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+            timezone: TimeZoneId::new(command.timezone).map_err(|error| {
+                ApiError::body_validation("#/timezone", "invalid_timezone", error.to_string())
+            })?,
         };
         Ok(self.repository.create(household).await?)
     }
@@ -43,6 +44,6 @@ impl HouseholdService {
         self.repository
             .find(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))
     }
 }

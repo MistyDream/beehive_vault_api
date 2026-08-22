@@ -1,11 +1,8 @@
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::{
     error::ApiError,
+    extract::{ApiJson, ApiPath, ApiQuery},
     pagination::{Pagination, PaginationQuery},
     types::{HouseholdId, TransferId},
 };
@@ -17,8 +14,8 @@ use super::{
 
 pub(super) async fn create(
     State(module): State<TransfersModule>,
-    Path(household_id): Path<HouseholdId>,
-    Json(request): Json<CreateTransferRequest>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
+    ApiJson(request): ApiJson<CreateTransferRequest>,
 ) -> Result<(StatusCode, Json<TransferResponse>), ApiError> {
     let transfer = module.service.create(household_id, request.into()).await?;
 
@@ -27,8 +24,8 @@ pub(super) async fn create(
 
 pub(super) async fn list(
     State(module): State<TransfersModule>,
-    Path(household_id): Path<HouseholdId>,
-    Query(query): Query<PaginationQuery>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
+    ApiQuery(query): ApiQuery<PaginationQuery>,
 ) -> Result<Json<Vec<TransferResponse>>, ApiError> {
     let transfers = module
         .service
@@ -40,7 +37,7 @@ pub(super) async fn list(
 
 pub(super) async fn get(
     State(module): State<TransfersModule>,
-    Path((household_id, transfer_id)): Path<(HouseholdId, TransferId)>,
+    ApiPath((household_id, transfer_id)): ApiPath<(HouseholdId, TransferId)>,
 ) -> Result<Json<TransferResponse>, ApiError> {
     let transfer = module.service.get(household_id, transfer_id).await?;
 
@@ -49,8 +46,8 @@ pub(super) async fn get(
 
 pub(super) async fn update(
     State(module): State<TransfersModule>,
-    Path((household_id, transfer_id)): Path<(HouseholdId, TransferId)>,
-    Json(request): Json<UpdateTransferRequest>,
+    ApiPath((household_id, transfer_id)): ApiPath<(HouseholdId, TransferId)>,
+    ApiJson(request): ApiJson<UpdateTransferRequest>,
 ) -> Result<Json<TransferResponse>, ApiError> {
     let transfer = module
         .service
@@ -62,7 +59,7 @@ pub(super) async fn update(
 
 pub(super) async fn delete(
     State(module): State<TransfersModule>,
-    Path((household_id, transfer_id)): Path<(HouseholdId, TransferId)>,
+    ApiPath((household_id, transfer_id)): ApiPath<(HouseholdId, TransferId)>,
 ) -> Result<StatusCode, ApiError> {
     module.service.delete(household_id, transfer_id).await?;
 

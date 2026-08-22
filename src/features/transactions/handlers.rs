@@ -1,11 +1,8 @@
-use axum::{
-    Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
-};
+use axum::{Json, extract::State, http::StatusCode};
 
 use crate::{
     error::ApiError,
+    extract::{ApiJson, ApiPath, ApiQuery},
     types::{HouseholdId, TransactionId},
 };
 
@@ -19,8 +16,8 @@ use super::{
 
 pub(super) async fn create(
     State(module): State<TransactionsModule>,
-    Path(household_id): Path<HouseholdId>,
-    Json(request): Json<CreateTransactionRequest>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
+    ApiJson(request): ApiJson<CreateTransactionRequest>,
 ) -> Result<(StatusCode, Json<TransactionResponse>), ApiError> {
     let transaction = module.service.create(household_id, request.into()).await?;
 
@@ -29,8 +26,8 @@ pub(super) async fn create(
 
 pub(super) async fn list(
     State(module): State<TransactionsModule>,
-    Path(household_id): Path<HouseholdId>,
-    Query(query): Query<ListTransactionsQuery>,
+    ApiPath(household_id): ApiPath<HouseholdId>,
+    ApiQuery(query): ApiQuery<ListTransactionsQuery>,
 ) -> Result<Json<Vec<TransactionResponse>>, ApiError> {
     let transactions = module.service.list(household_id, query.try_into()?).await?;
 
@@ -39,7 +36,7 @@ pub(super) async fn list(
 
 pub(super) async fn get(
     State(module): State<TransactionsModule>,
-    Path((household_id, transaction_id)): Path<(HouseholdId, TransactionId)>,
+    ApiPath((household_id, transaction_id)): ApiPath<(HouseholdId, TransactionId)>,
 ) -> Result<Json<TransactionResponse>, ApiError> {
     let transaction = module.service.get(household_id, transaction_id).await?;
 
@@ -48,8 +45,8 @@ pub(super) async fn get(
 
 pub(super) async fn update(
     State(module): State<TransactionsModule>,
-    Path((household_id, transaction_id)): Path<(HouseholdId, TransactionId)>,
-    Json(request): Json<UpdateTransactionRequest>,
+    ApiPath((household_id, transaction_id)): ApiPath<(HouseholdId, TransactionId)>,
+    ApiJson(request): ApiJson<UpdateTransactionRequest>,
 ) -> Result<Json<TransactionResponse>, ApiError> {
     let transaction = module
         .service
@@ -61,7 +58,7 @@ pub(super) async fn update(
 
 pub(super) async fn delete(
     State(module): State<TransactionsModule>,
-    Path((household_id, transaction_id)): Path<(HouseholdId, TransactionId)>,
+    ApiPath((household_id, transaction_id)): ApiPath<(HouseholdId, TransactionId)>,
 ) -> Result<StatusCode, ApiError> {
     module.service.delete(household_id, transaction_id).await?;
 

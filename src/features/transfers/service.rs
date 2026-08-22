@@ -2,7 +2,7 @@ use chrono::{NaiveDate, Utc};
 use rust_decimal::Decimal;
 
 use crate::{
-    error::ApiError,
+    error::{ApiError, ProblemKind},
     features::{
         accounts::{Account, AccountRepository},
         households::HouseholdRepository,
@@ -96,21 +96,40 @@ impl TransferService {
         command: CreateTransferCommand,
     ) -> Result<Transfer, ApiError> {
         if command.source.account_id == command.destination.account_id {
-            return Err(ApiError::BadRequest(
-                "source and destination accounts must be different".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/destination/accountId",
+                "transfer_accounts_must_differ",
+                "source and destination accounts must be different",
             ));
         }
 
-        let amount = TransferAmount::new(command.amount)
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+        let amount = TransferAmount::new(command.amount).map_err(|error| {
+            ApiError::body_validation("#/amount", "non_positive_amount", error.to_string())
+        })?;
         let current_date = self.current_date(household_id).await?;
-        self.validate_date(command.source.booking_date, current_date)?;
-        self.validate_date(command.destination.booking_date, current_date)?;
+        self.validate_date(
+            command.source.booking_date,
+            current_date,
+            "#/source/bookingDate",
+        )?;
+        self.validate_date(
+            command.destination.booking_date,
+            current_date,
+            "#/destination/bookingDate",
+        )?;
         let source_account = self
-            .active_account(household_id, command.source.account_id)
+            .active_account(
+                household_id,
+                command.source.account_id,
+                "#/source/accountId",
+            )
             .await?;
         let destination_account = self
-            .active_account(household_id, command.destination.account_id)
+            .active_account(
+                household_id,
+                command.destination.account_id,
+                "#/destination/accountId",
+            )
             .await?;
 
         let source =
@@ -139,19 +158,32 @@ impl TransferService {
         role: TransferRole,
         account: Account,
     ) -> Result<NewTransferMovement, ApiError> {
+        let pointer_prefix = format!("#/{}", role.as_str());
         Ok(NewTransferMovement {
             transaction_id: TransactionId::new(),
             account_id: command.account_id,
             booking_date: command.booking_date,
-            label: TransactionLabel::new(command.label)
-                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
-            amount: TransactionAmount::new(amount.signed_value(role, account.kind))
-                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+            label: TransactionLabel::new(command.label).map_err(|error| {
+                ApiError::body_validation(
+                    format!("{pointer_prefix}/label"),
+                    "invalid_length",
+                    error.to_string(),
+                )
+            })?,
+            amount: TransactionAmount::new(amount.signed_value(role, account.kind)).map_err(
+                |error| ApiError::body_validation("#/amount", "zero_amount", error.to_string()),
+            )?,
             note: command
                 .note
                 .map(TransactionNote::new)
                 .transpose()
-                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+                .map_err(|error| {
+                    ApiError::body_validation(
+                        format!("{pointer_prefix}/note"),
+                        "invalid_length",
+                        error.to_string(),
+                    )
+                })?,
         })
     }
 
@@ -163,7 +195,7 @@ impl TransferService {
         self.transfer_repository
             .find(household_id, transfer_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Transfer not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::TransferNotFound))
     }
 
     pub async fn list(
@@ -177,7 +209,7 @@ impl TransferService {
             .await?
             .is_none()
         {
-            return Err(ApiError::NotFound("Household not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::HouseholdNotFound));
         }
 
         Ok(self
@@ -201,7 +233,9 @@ impl TransferService {
             .amount
             .map(TransferAmount::new)
             .transpose()
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?
+            .map_err(|error| {
+                ApiError::body_validation("#/amount", "non_positive_amount", error.to_string())
+            })?
             .unwrap_or_else(|| transfer.amount());
         let source_update = command.source.unwrap_or_default();
         let destination_update = command.destination.unwrap_or_default();
@@ -210,6 +244,7 @@ impl TransferService {
                 household_id,
                 transfer.source.account_id,
                 source_update.account_id,
+                "#/source/accountId",
             )
             .await?;
         let destination_account = self
@@ -217,11 +252,14 @@ impl TransferService {
                 household_id,
                 transfer.destination.account_id,
                 destination_update.account_id,
+                "#/destination/accountId",
             )
             .await?;
         if source_account.id == destination_account.id {
-            return Err(ApiError::BadRequest(
-                "source and destination accounts must be different".to_owned(),
+            return Err(ApiError::body_validation(
+                "#/destination/accountId",
+                "transfer_accounts_must_differ",
+                "source and destination accounts must be different",
             ));
         }
 
@@ -240,8 +278,12 @@ impl TransferService {
             destination_account,
         )?;
         let current_date = self.current_date(household_id).await?;
-        self.validate_date(source.booking_date, current_date)?;
-        self.validate_date(destination.booking_date, current_date)?;
+        self.validate_date(source.booking_date, current_date, "#/source/bookingDate")?;
+        self.validate_date(
+            destination.booking_date,
+            current_date,
+            "#/destination/bookingDate",
+        )?;
 
         self.transfer_repository
             .update(TransferUpdate {
@@ -251,7 +293,7 @@ impl TransferService {
                 destination,
             })
             .await?
-            .ok_or_else(|| ApiError::NotFound("Transfer not found".to_owned()))
+            .ok_or_else(|| ApiError::new(ProblemKind::TransferNotFound))
     }
 
     fn update_movement(
@@ -261,18 +303,28 @@ impl TransferService {
         role: TransferRole,
         account: Account,
     ) -> Result<NewTransferMovement, ApiError> {
+        let pointer_prefix = format!("#/{}", role.as_str());
         let label = update
             .label
             .map(TransactionLabel::new)
             .transpose()
-            .map_err(|error| ApiError::BadRequest(error.to_string()))?
+            .map_err(|error| {
+                ApiError::body_validation(
+                    format!("{pointer_prefix}/label"),
+                    "invalid_length",
+                    error.to_string(),
+                )
+            })?
             .unwrap_or(current.label);
         let note = match update.note {
             FieldUpdate::Unchanged => current.note,
-            FieldUpdate::Set(note) => Some(
-                TransactionNote::new(note)
-                    .map_err(|error| ApiError::BadRequest(error.to_string()))?,
-            ),
+            FieldUpdate::Set(note) => Some(TransactionNote::new(note).map_err(|error| {
+                ApiError::body_validation(
+                    format!("{pointer_prefix}/note"),
+                    "invalid_length",
+                    error.to_string(),
+                )
+            })?),
             FieldUpdate::Clear => None,
         };
 
@@ -281,8 +333,9 @@ impl TransferService {
             account_id: account.id,
             booking_date: update.booking_date.unwrap_or(current.booking_date),
             label,
-            amount: TransactionAmount::new(amount.signed_value(role, account.kind))
-                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+            amount: TransactionAmount::new(amount.signed_value(role, account.kind)).map_err(
+                |error| ApiError::body_validation("#/amount", "zero_amount", error.to_string()),
+            )?,
             note,
         })
     }
@@ -298,7 +351,7 @@ impl TransferService {
             .await?
             == 0
         {
-            return Err(ApiError::NotFound("Transfer not found".to_owned()));
+            return Err(ApiError::new(ProblemKind::TransferNotFound));
         }
 
         Ok(())
@@ -308,13 +361,16 @@ impl TransferService {
         &self,
         household_id: HouseholdId,
         account_id: AccountId,
+        pointer: &'static str,
     ) -> Result<Account, ApiError> {
         self.account_repository
             .find(household_id, account_id)
             .await?
             .ok_or_else(|| {
-                ApiError::BadRequest(
-                    "account must be active and belong to the household".to_owned(),
+                ApiError::body_validation(
+                    pointer,
+                    "invalid_account",
+                    "account must be active and belong to the household",
                 )
             })
     }
@@ -324,15 +380,19 @@ impl TransferService {
         household_id: HouseholdId,
         current_account_id: AccountId,
         requested_account_id: Option<AccountId>,
+        pointer: &'static str,
     ) -> Result<Account, ApiError> {
         if let Some(account_id) = requested_account_id {
-            return self.active_account(household_id, account_id).await;
+            return self.active_account(household_id, account_id, pointer).await;
         }
 
         self.account_repository
             .find_including_archived(household_id, current_account_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Transfer account not found".to_owned()))
+            .ok_or_else(|| {
+                tracing::error!(%household_id, %current_account_id, "transfer account is missing");
+                ApiError::new(ProblemKind::InternalError)
+            })
     }
 
     async fn current_date(&self, household_id: HouseholdId) -> Result<NaiveDate, ApiError> {
@@ -340,22 +400,25 @@ impl TransferService {
             .household_repository
             .find(household_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Household not found".to_owned()))?;
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
 
         household
             .timezone
             .date_at(Utc::now())
-            .map_err(|error| ApiError::Database(sqlx::Error::Decode(Box::new(error))))
+            .map_err(|error| ApiError::from(sqlx::Error::Decode(Box::new(error))))
     }
 
     fn validate_date(
         &self,
         booking_date: NaiveDate,
         current_date: NaiveDate,
+        pointer: &'static str,
     ) -> Result<(), ApiError> {
         if booking_date > current_date {
-            return Err(ApiError::BadRequest(
-                "transfer booking dates must not be in the future".to_owned(),
+            return Err(ApiError::body_validation(
+                pointer,
+                "date_in_future",
+                "transfer booking dates must not be in the future",
             ));
         }
 

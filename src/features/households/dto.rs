@@ -46,3 +46,24 @@ impl From<Household> for HouseholdResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn unknown_create_fields_are_ignored() {
+        let request: CreateHouseholdRequest = serde_json::from_value(json!({
+            "name": "Home",
+            "baseCurrency": "EUR",
+            "timezone": "Europe/Paris",
+            "futureField": "ignored"
+        }))
+        .expect("unknown fields should preserve forward compatibility");
+        let command = CreateHouseholdCommand::from(request);
+
+        assert_eq!(command.name, "Home");
+    }
+}

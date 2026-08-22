@@ -172,7 +172,7 @@ async fn household_transactions_can_be_managed() {
             "amount": "10.00",
             "nature": "income"
         }),
-        StatusCode::BAD_REQUEST,
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
 
