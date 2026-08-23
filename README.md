@@ -26,6 +26,7 @@ Les fonctions spécialisées comme le suivi boursier avancé, le scoring d'entre
 - [Journal des décisions d'architecture](docs/adr/README.md)
 - [Environnement de développement](docs/development.md)
 - [API du socle financier](docs/api.md)
+- [Contrats API du nouveau client Web](docs/client-contracts.md)
 - [Notes de documentation](docs/notes/documentation-backlog.md)
 
 ## Socle technique

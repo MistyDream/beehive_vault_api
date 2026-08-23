@@ -2,13 +2,16 @@
 
 Toutes les routes métier sont préfixées par `/v1` et utilisent JSON. Les UUID sont générés par l'application et les montants décimaux sont transmis sous forme de chaînes afin de préserver leur précision.
 
+Les [contrats du nouveau client Web](client-contracts.md) décrivent séparément les représentations cibles validées mais pas encore entièrement implémentées.
+Le présent document reste la référence du comportement actuellement disponible.
+
 ## Pagination
 
 Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et vaut 1 par défaut. `limit` vaut 50 par défaut et accepte une valeur comprise entre 1 et 200. L'offset PostgreSQL est calculé en interne et n'appartient pas au contrat HTTP.
 
-Le nombre total d'éléments n'est pas retourné systématiquement.
+Dans le contrat actuellement implémenté, le nombre total d'éléments n'est pas retourné systématiquement.
 
-Le nouveau client Web utilisera un chargement explicite « Afficher plus » sans afficher le nombre total. Avant son intégration, les collections concernées doivent néanmoins indiquer si une page suivante existe, avec `hasMore` ou une information équivalente. Le format commun de cette métadonnée reste à stabiliser.
+Les réponses actuelles sont encore des tableaux JSON. La cible validée pour le nouveau client utilise une enveloppe `items`, `page`, `limit` et `total`. Le client déduira l'existence d'une page suivante ; aucun membre `hasMore` ne sera retourné. Ce changement est détaillé dans les [contrats du client](client-contracts.md#pagination).
 
 ## Erreurs
 
@@ -94,7 +97,7 @@ Le contrat actuellement implémenté reste :
 - `DELETE /v1/households/{household_id}/institutions/{institution_id}` l'archive.
 
 L'[ADR-0008](adr/0008-global-financial-institution-catalog.md) remplace ce modèle par un catalogue global configuré côté serveur et exposé à terme avec `GET /v1/institutions`. Cette migration doit précéder l'intégration des comptes
-par le nouveau client web.
+par le nouveau client web. Sa représentation cible minimale `{ id, name }` et la migration des références existantes sont précisées dans les [contrats du client](client-contracts.md#catalogue-global-détablissements).
 
 ## Catégories
 
@@ -126,12 +129,16 @@ Les transactions du jour du rapprochement sont considérées comme déjà inclus
 
 Le type peut changer au sein d'une même famille actif ou dette. Le passage entre ces deux familles est refusé dès que le compte possède une transaction, y compris supprimée logiquement.
 
+La cible du nouveau client ajoute les sous-totaux de ses trois groupes, la consultation des comptes archivés et leur restauration. Elle interdit également l'archivage d'un compte dont le solde calculé n'est pas nul. Ces comportements restent à implémenter et sont définis dans les [contrats du client](client-contracts.md#collection-des-comptes).
+
 ## Soldes de rapprochement
 
 - `POST /v1/households/{household_id}/accounts/{account_id}/balances` ajoute un solde daté ;
 - `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien.
 
 Les sources acceptées sont `manual`, `import`, `synchronization` et `reconciliation`.
+
+La correction d'un solde existant, le refus des dates futures et l'obligation qu'un nouveau rapprochement soit postérieur au dernier appartiennent au [contrat cible](client-contracts.md#soldes-de-rapprochement).
 
 ## Transactions
 
@@ -143,21 +150,14 @@ Les sources acceptées sont `manual`, `import`, `synchronization` et `reconcilia
 
 La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`, `uncategorized`, `source`, `search`, `page` et `limit`. `uncategorized=true` sélectionne les revenus et dépenses sans catégorie, exclut les transferts et ne peut pas être combiné avec `categoryId`. Les mouvements d'un transfert apparaissent dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
 
-Le champ `amount` actuellement exposé représente le montant signé stocké sur le compte. Cette représentation reste le contrat effectif tant que le contrat de saisie du nouveau client Web n'est pas stabilisé.
+Le champ `amount` actuellement exposé représente le montant signé stocké sur le compte. Cette représentation reste le contrat effectif jusqu'à l'implémentation du contrat cible du nouveau client Web.
 
-### Besoins du nouveau client Web
+### Cible du nouveau client Web
 
-La conception Web de la liste, du détail et des formulaires met en évidence les évolutions suivantes, qui ne sont pas encore implémentées :
+La conception de la liste, du détail et des formulaires a stabilisé une collection consolidée où un transfert apparaît une seule fois, une pagination avec `total`, des résumés compacts incorporés et une représentation distincte du montant nominal, de l'effet économique et du montant du compte.
 
-- accompagner la pagination d'une information indiquant l'existence d'une page suivante, sans rendre le total obligatoire ;
-- exposer l'effet économique affichable d'un mouvement sans demander au client de recalculer les règles propres aux comptes d'actif et de dette ;
-- enrichir un mouvement de transfert avec le compte opposé et les informations nécessaires à un résumé « compte source → compte destination » ;
-- rendre résolubles les libellés des comptes et catégories archivés encore référencés par les transactions historiques ;
-- définir une sémantique de saisie qui accepte un montant nominal compréhensible tout en préservant les remboursements et corrections de signe inverse ;
-- stabiliser la précision maximale acceptée et affichable pour chaque devise sans demander au client de convertir les décimaux en nombres binaires ;
-- stabiliser une métadonnée d'icône pour les catégories si le catalogue doit porter ce choix, le client conservant dans tous les cas une icône neutre de repli.
-
-Le choix entre des résumés incorporés aux réponses et des référentiels incluant les éléments archivés reste ouvert. Il devra éviter les appels supplémentaires par transaction et ne pas faire dépendre l'affichage historique d'un libellé courant introuvable.
+Ces évolutions ne sont pas encore implémentées. Leur contrat complet, notamment la saisie `standard` ou `reversal`, les références archivées et la précision maximale de quatre décimales, est défini dans les [contrats du client](client-contracts.md#collection-consolidée-des-opérations).
+Le MVP retient un pictogramme neutre côté Web plutôt qu'une métadonnée d'icône dans l'API.
 
 ## Transferts
 

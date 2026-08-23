@@ -24,3 +24,4 @@ ADR est créé et référence celui qu'il remplace afin de préserver l'historiq
 - [ADR-0006 — Exposer une pagination par page](0006-page-based-pagination.md)
 - [ADR-0007 — Standardiser les erreurs HTTP avec RFC 9457](0007-rfc-9457-problem-details.md)
 - [ADR-0008 — Utiliser un catalogue global d'établissements financiers](0008-global-financial-institution-catalog.md)
+- [ADR-0009 — Stabiliser les contrats financiers du nouveau client Web](0009-stabilize-web-client-contracts.md)
