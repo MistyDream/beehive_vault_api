@@ -2,15 +2,15 @@ use axum::{Json, extract::State, http::StatusCode};
 
 use crate::{
     error::ApiError,
-    extract::{ApiJson, ApiPath},
+    extract::{ApiJson, ApiPath, ApiQuery},
     types::{AccountId, BalanceSnapshotId, HouseholdId},
 };
 
 use super::{
     AccountsModule,
     dto::{
-        AccountResponse, BalanceResponse, CreateAccountRequest, CreateBalanceRequest,
-        UpdateAccountRequest, UpdateBalanceRequest,
+        AccountCollectionResponse, AccountResponse, BalanceResponse, CreateAccountRequest,
+        CreateBalanceRequest, ListAccountsQuery, UpdateAccountRequest, UpdateBalanceRequest,
     },
 };
 
@@ -26,9 +26,15 @@ pub(super) async fn create(
 pub(super) async fn list(
     State(module): State<AccountsModule>,
     ApiPath(household_id): ApiPath<HouseholdId>,
-) -> Result<Json<Vec<AccountResponse>>, ApiError> {
-    let accounts = module.service.list(household_id).await?;
-    Ok(Json(accounts.into_iter().map(Into::into).collect()))
+    ApiQuery(query): ApiQuery<ListAccountsQuery>,
+) -> Result<Json<AccountCollectionResponse>, ApiError> {
+    Ok(Json(
+        module
+            .service
+            .list(household_id, query.status)
+            .await?
+            .into(),
+    ))
 }
 
 pub(super) async fn get(
@@ -60,6 +66,19 @@ pub(super) async fn archive(
 ) -> Result<StatusCode, ApiError> {
     module.service.archive(household_id, account_id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub(super) async fn restore(
+    State(module): State<AccountsModule>,
+    ApiPath((household_id, account_id)): ApiPath<(HouseholdId, AccountId)>,
+) -> Result<Json<AccountResponse>, ApiError> {
+    Ok(Json(
+        module
+            .service
+            .restore(household_id, account_id)
+            .await?
+            .into(),
+    ))
 }
 
 pub(super) async fn create_balance(

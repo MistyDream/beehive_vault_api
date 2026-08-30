@@ -30,6 +30,7 @@ pub enum ProblemKind {
     DuplicateCategoryName,
     DuplicateBalanceDate,
     AccountKindChangeForbidden,
+    AccountBalanceNotZero,
     TransferMovementUpdateForbidden,
     TransferMovementDeleteForbidden,
     ImportedTransactionFieldsImmutable,
@@ -56,6 +57,7 @@ impl ProblemKind {
             Self::DuplicateCategoryName => "duplicate-category-name",
             Self::DuplicateBalanceDate => "duplicate-balance-date",
             Self::AccountKindChangeForbidden => "account-kind-change-forbidden",
+            Self::AccountBalanceNotZero => "account-balance-not-zero",
             Self::TransferMovementUpdateForbidden => "transfer-movement-update-forbidden",
             Self::TransferMovementDeleteForbidden => "transfer-movement-delete-forbidden",
             Self::ImportedTransactionFieldsImmutable => "imported-transaction-fields-immutable",
@@ -82,6 +84,7 @@ impl ProblemKind {
             Self::DuplicateCategoryName => "duplicate_category_name",
             Self::DuplicateBalanceDate => "duplicate_balance_date",
             Self::AccountKindChangeForbidden => "account_kind_change_forbidden",
+            Self::AccountBalanceNotZero => "account_balance_not_zero",
             Self::TransferMovementUpdateForbidden => "transfer_movement_update_forbidden",
             Self::TransferMovementDeleteForbidden => "transfer_movement_delete_forbidden",
             Self::ImportedTransactionFieldsImmutable => "imported_transaction_fields_immutable",
@@ -108,6 +111,7 @@ impl ProblemKind {
             Self::DuplicateCategoryName => "Category name already exists",
             Self::DuplicateBalanceDate => "Balance date already exists",
             Self::AccountKindChangeForbidden => "Account kind change forbidden",
+            Self::AccountBalanceNotZero => "Account balance is not zero",
             Self::TransferMovementUpdateForbidden => "Transfer movement update forbidden",
             Self::TransferMovementDeleteForbidden => "Transfer movement deletion forbidden",
             Self::ImportedTransactionFieldsImmutable => "Imported transaction fields are immutable",
@@ -134,6 +138,7 @@ impl ProblemKind {
             | Self::DuplicateCategoryName
             | Self::DuplicateBalanceDate
             | Self::AccountKindChangeForbidden
+            | Self::AccountBalanceNotZero
             | Self::TransferMovementUpdateForbidden
             | Self::TransferMovementDeleteForbidden
             | Self::ImportedTransactionFieldsImmutable => StatusCode::CONFLICT,

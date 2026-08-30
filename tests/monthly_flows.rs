@@ -173,6 +173,18 @@ async fn monthly_flows_are_aggregated_and_traceable() {
     .await;
     send_json(
         &application,
+        "POST",
+        &format!("/v1/households/{household_id}/accounts/{credit_card_id}/balances"),
+        json!({
+            "amount": "0.00",
+            "balanceDate": "2026-08-10",
+            "source": "reconciliation"
+        }),
+        StatusCode::CREATED,
+    )
+    .await;
+    send_json(
+        &application,
         "DELETE",
         &format!("/v1/households/{household_id}/accounts/{credit_card_id}"),
         Value::Null,

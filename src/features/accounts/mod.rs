@@ -41,6 +41,10 @@ pub(crate) fn routes(module: AccountsModule) -> Router {
                 .delete(handlers::archive),
         )
         .route(
+            "/households/{household_id}/accounts/{account_id}/restore",
+            post(handlers::restore),
+        )
+        .route(
             "/households/{household_id}/accounts/{account_id}/balances",
             post(handlers::create_balance).get(handlers::list_balances),
         )

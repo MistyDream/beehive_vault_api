@@ -191,7 +191,7 @@ L'API dérive l'effet économique depuis `nature` et `effect`, puis le montant b
 
 `GET /v1/households/{household_id}/accounts` reste non paginé et accepte `status=active` ou `status=archived`. La valeur par défaut est `active`.
 
-La réponse cible contient les comptes et les sous-totaux calculés par l'API :
+La réponse contient les comptes et les sous-totaux calculés par l'API :
 
 ```json
 {
@@ -254,12 +254,12 @@ Le corps accepte `amount`, `balanceDate` ou les deux :
 
 Au moins un champ doit être fourni. La correction conserve la source originale et accepte toute date non future qui ne crée pas de doublon pour le compte. Une correction peut donc changer le solde qui sert de point d'ancrage le plus récent.
 
-Les problèmes propres aux soldes sont disponibles. Le conflit d'archivage reste planifié avec le cycle de vie des comptes :
+Les problèmes propres aux soldes et à l'archivage sont disponibles :
 
 | Disponibilité | Statut | Suffixe de `type`          | `code`                     |
 | ------------- | -----: | -------------------------- | -------------------------- |
 | Disponible    |    404 | `balance-not-found`        | `balance_not_found`        |
-| Planifié      |    409 | `account-balance-not-zero` | `account_balance_not_zero` |
+| Disponible    |    409 | `account-balance-not-zero` | `account_balance_not_zero` |
 | Disponible    |    409 | `duplicate-balance-date`   | `duplicate_balance_date`   |
 
 Les dates futures et les dates qui ne sont pas postérieures au dernier solde utilisent `validation-error` avec respectivement les codes de champ `balance_date_in_future` et `balance_date_not_after_latest`.
@@ -297,7 +297,7 @@ Les lots suivants appliqueront ce contrat dans cet ordre :
 
 1. catalogue global d'établissements : disponible ;
 2. validations de date et correction des soldes : disponibles ;
-3. comptes archivés, restauration et sous-totaux : planifiés ;
+3. comptes archivés, restauration et sous-totaux : disponibles ;
 4. collection consolidée, montants, résumés incorporés et pagination : planifiée.
 
 Chaque lot mettra à jour `api.md`, le catalogue des fonctionnalités et les tests au moment où son comportement deviendra réellement disponible.

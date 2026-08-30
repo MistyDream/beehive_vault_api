@@ -1,4 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use rust_decimal::Decimal;
 use sqlx::PgConnection;
 
 use crate::{
@@ -10,7 +11,8 @@ use crate::{
 };
 
 use super::domain::{
-    Account, AccountKind, BalanceSnapshot, BalanceSource, NewAccount, NewBalanceSnapshot,
+    Account, AccountKind, AccountStatus, BalanceSnapshot, BalanceSource, NewAccount,
+    NewBalanceSnapshot,
 };
 
 macro_rules! account_select {
@@ -43,6 +45,13 @@ pub struct AccountRepository {
 pub enum CreateBalanceOutcome {
     Created(BalanceSnapshot),
     NotAfterLatest,
+    AccountNotFound,
+}
+
+pub enum ArchiveAccountOutcome {
+    Archived,
+    NotFound,
+    BalanceNotZero,
 }
 
 impl AccountRepository {
@@ -200,12 +209,32 @@ impl AccountRepository {
     }
 
     pub async fn list(&self, household_id: HouseholdId) -> Result<Vec<Account>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, AccountRow>(account_select!(
-            "WHERE a.household_id = $1 AND a.archived_at IS NULL ORDER BY lower(a.name)"
-        ))
-        .bind(household_id)
-        .fetch_all(self.database.pool())
-        .await?;
+        self.list_by_status(household_id, AccountStatus::Active)
+            .await
+    }
+
+    pub async fn list_by_status(
+        &self,
+        household_id: HouseholdId,
+        status: AccountStatus,
+    ) -> Result<Vec<Account>, sqlx::Error> {
+        let rows =
+            match status {
+                AccountStatus::Active => {
+                    sqlx::query_as::<_, AccountRow>(account_select!(
+                        "WHERE a.household_id = $1 AND a.archived_at IS NULL ORDER BY lower(a.name)"
+                    ))
+                    .bind(household_id)
+                    .fetch_all(self.database.pool())
+                    .await?
+                }
+                AccountStatus::Archived => sqlx::query_as::<_, AccountRow>(account_select!(
+                    "WHERE a.household_id = $1 AND a.archived_at IS NOT NULL ORDER BY lower(a.name)"
+                ))
+                .bind(household_id)
+                .fetch_all(self.database.pool())
+                .await?,
+            };
         rows.into_iter().map(Account::try_from).collect()
     }
 
@@ -284,20 +313,97 @@ impl AccountRepository {
         &self,
         household_id: HouseholdId,
         account_id: AccountId,
-    ) -> Result<u64, sqlx::Error> {
-        let result = sqlx::query(
+    ) -> Result<ArchiveAccountOutcome, sqlx::Error> {
+        let mut transaction = self.database.begin_transaction().await?;
+        let account = sqlx::query_scalar::<_, AccountId>(
+            "SELECT id FROM accounts \
+             WHERE household_id = $1 AND id = $2 AND archived_at IS NULL FOR UPDATE",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if account.is_none() {
+            return Ok(ArchiveAccountOutcome::NotFound);
+        }
+
+        let calculated_balance = sqlx::query_scalar::<_, Decimal>(
+            "SELECT COALESCE(latest.amount, 0::numeric) \
+                    + COALESCE(activity.amount, 0::numeric) \
+             FROM accounts a \
+             LEFT JOIN LATERAL ( \
+                 SELECT amount, balance_date FROM account_balance_snapshots \
+                 WHERE account_id = a.id ORDER BY balance_date DESC LIMIT 1 \
+             ) latest ON true \
+             LEFT JOIN LATERAL ( \
+                 SELECT sum(amount) AS amount FROM transactions \
+                 WHERE account_id = a.id AND deleted_at IS NULL \
+                   AND (latest.balance_date IS NULL OR booking_date > latest.balance_date) \
+             ) activity ON true \
+             WHERE a.household_id = $1 AND a.id = $2",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_one(&mut *transaction)
+        .await?;
+        if !calculated_balance.is_zero() {
+            return Ok(ArchiveAccountOutcome::BalanceNotZero);
+        }
+
+        sqlx::query(
             "UPDATE accounts SET archived_at = now(), updated_at = now() \
          WHERE household_id = $1 AND id = $2 AND archived_at IS NULL",
         )
         .bind(household_id)
         .bind(account_id)
-        .execute(self.database.pool())
+        .execute(&mut *transaction)
         .await?;
-        Ok(result.rows_affected())
+        transaction.commit().await?;
+        Ok(ArchiveAccountOutcome::Archived)
+    }
+
+    pub async fn restore(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+    ) -> Result<Option<Account>, sqlx::Error> {
+        let mut transaction = self.database.begin_transaction().await?;
+        let account_exists = sqlx::query_scalar::<_, AccountId>(
+            "SELECT id FROM accounts WHERE household_id = $1 AND id = $2 FOR UPDATE",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        .is_some();
+        if !account_exists {
+            return Ok(None);
+        }
+
+        sqlx::query(
+            "UPDATE accounts SET archived_at = NULL, \
+             updated_at = CASE WHEN archived_at IS NULL THEN updated_at ELSE now() END \
+             WHERE household_id = $1 AND id = $2",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .execute(&mut *transaction)
+        .await?;
+        let row = sqlx::query_as::<_, AccountRow>(account_select!(
+            "WHERE a.household_id = $1 AND a.id = $2"
+        ))
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_one(&mut *transaction)
+        .await?;
+        let account = Account::try_from(row)?;
+        transaction.commit().await?;
+        Ok(Some(account))
     }
 
     pub async fn create_balance(
         &self,
+        household_id: HouseholdId,
         snapshot_id: BalanceSnapshotId,
         account_id: AccountId,
         amount: AccountBalance,
@@ -305,10 +411,18 @@ impl AccountRepository {
         source: BalanceSource,
     ) -> Result<CreateBalanceOutcome, sqlx::Error> {
         let mut transaction = self.database.begin_transaction().await?;
-        sqlx::query_scalar::<_, AccountId>("SELECT id FROM accounts WHERE id = $1 FOR UPDATE")
-            .bind(account_id)
-            .fetch_one(&mut *transaction)
-            .await?;
+        let account_exists = sqlx::query_scalar::<_, AccountId>(
+            "SELECT id FROM accounts \
+             WHERE household_id = $1 AND id = $2 AND archived_at IS NULL FOR UPDATE",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        .is_some();
+        if !account_exists {
+            return Ok(CreateBalanceOutcome::AccountNotFound);
+        }
         let latest_balance_date = sqlx::query_scalar::<_, Option<NaiveDate>>(
             "SELECT max(balance_date) FROM account_balance_snapshots WHERE account_id = $1",
         )

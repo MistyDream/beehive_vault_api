@@ -1,4 +1,5 @@
 use chrono::{NaiveDate, Utc};
+use rust_decimal::Decimal;
 
 use crate::{
     error::{ApiError, ProblemKind, required_text},
@@ -9,10 +10,22 @@ use crate::{
 
 use super::{
     domain::{
-        Account, AccountKind, BalanceSnapshot, BalanceSource, NewAccount, NewBalanceSnapshot,
+        Account, AccountKind, AccountStatus, BalanceSnapshot, BalanceSource, NewAccount,
+        NewBalanceSnapshot,
     },
-    repository::{AccountRepository, CreateBalanceOutcome},
+    repository::{AccountRepository, ArchiveAccountOutcome, CreateBalanceOutcome},
 };
+
+pub struct AccountTotals {
+    pub daily: AccountBalance,
+    pub savings: AccountBalance,
+    pub liabilities: AccountBalance,
+}
+
+pub struct AccountCollection {
+    pub items: Vec<Account>,
+    pub totals: AccountTotals,
+}
 
 pub struct CreateAccountCommand {
     pub institution_id: Option<InstitutionId>,
@@ -104,7 +117,11 @@ impl AccountService {
         self.get(household_id, account_id).await
     }
 
-    pub async fn list(&self, household_id: HouseholdId) -> Result<Vec<Account>, ApiError> {
+    pub async fn list(
+        &self,
+        household_id: HouseholdId,
+        status: AccountStatus,
+    ) -> Result<AccountCollection, ApiError> {
         if self
             .repository
             .household_currency(household_id)
@@ -113,7 +130,9 @@ impl AccountService {
         {
             return Err(ApiError::new(ProblemKind::HouseholdNotFound));
         }
-        Ok(self.repository.list(household_id).await?)
+        let items = self.repository.list_by_status(household_id, status).await?;
+        let totals = calculate_totals(&items);
+        Ok(AccountCollection { items, totals })
     }
 
     pub async fn get(
@@ -122,7 +141,7 @@ impl AccountService {
         account_id: AccountId,
     ) -> Result<Account, ApiError> {
         self.repository
-            .find(household_id, account_id)
+            .find_including_archived(household_id, account_id)
             .await?
             .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))
     }
@@ -134,7 +153,7 @@ impl AccountService {
         command: UpdateAccountCommand,
     ) -> Result<Account, ApiError> {
         if let Some(kind) = command.kind {
-            let current = self.get(household_id, account_id).await?;
+            let current = self.get_active(household_id, account_id).await?;
             if kind.is_liability() != current.kind.is_liability()
                 && self
                     .repository
@@ -169,7 +188,7 @@ impl AccountService {
         if affected == 0 {
             return Err(ApiError::new(ProblemKind::AccountNotFound));
         }
-        self.get(household_id, account_id).await
+        self.get_active(household_id, account_id).await
     }
 
     pub async fn archive(
@@ -177,10 +196,25 @@ impl AccountService {
         household_id: HouseholdId,
         account_id: AccountId,
     ) -> Result<(), ApiError> {
-        if self.repository.archive(household_id, account_id).await? == 0 {
-            return Err(ApiError::new(ProblemKind::AccountNotFound));
+        match self.repository.archive(household_id, account_id).await? {
+            ArchiveAccountOutcome::Archived => Ok(()),
+            ArchiveAccountOutcome::NotFound => Err(ApiError::new(ProblemKind::AccountNotFound)),
+            ArchiveAccountOutcome::BalanceNotZero => Err(ApiError::new(
+                ProblemKind::AccountBalanceNotZero,
+            )
+            .with_detail("An account can only be archived when its calculated balance is zero.")),
         }
-        Ok(())
+    }
+
+    pub async fn restore(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+    ) -> Result<Account, ApiError> {
+        self.repository
+            .restore(household_id, account_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))
     }
 
     pub async fn create_balance(
@@ -189,12 +223,13 @@ impl AccountService {
         account_id: AccountId,
         command: CreateBalanceCommand,
     ) -> Result<BalanceSnapshot, ApiError> {
-        self.get(household_id, account_id).await?;
+        self.get_active(household_id, account_id).await?;
         let current_date = self.current_date_for_household(household_id).await?;
         validate_balance_date_not_future(command.balance_date, current_date)?;
         match self
             .repository
             .create_balance(
+                household_id,
                 BalanceSnapshotId::new(),
                 account_id,
                 command.amount,
@@ -209,6 +244,9 @@ impl AccountService {
                 "balance_date_not_after_latest",
                 "balance date must be strictly after the latest balance date",
             )),
+            CreateBalanceOutcome::AccountNotFound => {
+                Err(ApiError::new(ProblemKind::AccountNotFound))
+            }
         }
     }
 
@@ -217,7 +255,7 @@ impl AccountService {
         household_id: HouseholdId,
         account_id: AccountId,
     ) -> Result<Vec<BalanceSnapshot>, ApiError> {
-        self.get(household_id, account_id).await?;
+        self.get_active(household_id, account_id).await?;
         Ok(self.repository.list_balances(account_id).await?)
     }
 
@@ -228,7 +266,7 @@ impl AccountService {
         balance_id: BalanceSnapshotId,
         command: UpdateBalanceCommand,
     ) -> Result<BalanceSnapshot, ApiError> {
-        self.get(household_id, account_id).await?;
+        self.get_active(household_id, account_id).await?;
         if command.is_empty() {
             return Err(ApiError::body_validation(
                 "#/",
@@ -268,6 +306,17 @@ impl AccountService {
         })
     }
 
+    async fn get_active(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+    ) -> Result<Account, ApiError> {
+        self.repository
+            .find(household_id, account_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))
+    }
+
     async fn validate_institution(
         &self,
         institution_id: Option<InstitutionId>,
@@ -284,6 +333,37 @@ impl AccountService {
         }
         Ok(())
     }
+}
+
+fn calculate_totals(accounts: &[Account]) -> AccountTotals {
+    let mut daily = Decimal::ZERO;
+    let mut savings = Decimal::ZERO;
+    let mut liabilities = Decimal::ZERO;
+
+    for account in accounts {
+        match account.kind {
+            AccountKind::Checking | AccountKind::Cash => {
+                daily += account.calculated_balance.value();
+            }
+            AccountKind::Savings | AccountKind::Investment | AccountKind::OtherAsset => {
+                savings += account.calculated_balance.value();
+            }
+            AccountKind::CreditCard | AccountKind::Loan | AccountKind::OtherLiability => {
+                liabilities += account.calculated_balance.value();
+            }
+        }
+    }
+
+    AccountTotals {
+        daily: normalized_account_total(daily),
+        savings: normalized_account_total(savings),
+        liabilities: normalized_account_total(liabilities),
+    }
+}
+
+fn normalized_account_total(mut total: Decimal) -> AccountBalance {
+    total.rescale(4);
+    AccountBalance::new(total)
 }
 
 fn validate_balance_date_not_future(

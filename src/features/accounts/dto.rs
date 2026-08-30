@@ -5,10 +5,17 @@ use crate::types::{
     AccountBalance, AccountId, BalanceSnapshotId, CurrencyCode, HouseholdId, InstitutionId,
 };
 
-use super::domain::{Account, AccountKind, BalanceSnapshot, BalanceSource};
+use super::domain::{Account, AccountKind, AccountStatus, BalanceSnapshot, BalanceSource};
 use super::service::{
-    CreateAccountCommand, CreateBalanceCommand, UpdateAccountCommand, UpdateBalanceCommand,
+    AccountCollection, AccountTotals, CreateAccountCommand, CreateBalanceCommand,
+    UpdateAccountCommand, UpdateBalanceCommand,
 };
+
+#[derive(Deserialize)]
+pub struct ListAccountsQuery {
+    #[serde(default)]
+    pub status: AccountStatus,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,6 +128,40 @@ impl From<Account> for AccountResponse {
             archived_at: account.archived_at,
             created_at: account.created_at,
             updated_at: account.updated_at,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountTotalsResponse {
+    daily: AccountBalance,
+    savings: AccountBalance,
+    liabilities: AccountBalance,
+}
+
+impl From<AccountTotals> for AccountTotalsResponse {
+    fn from(totals: AccountTotals) -> Self {
+        Self {
+            daily: totals.daily,
+            savings: totals.savings,
+            liabilities: totals.liabilities,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountCollectionResponse {
+    items: Vec<AccountResponse>,
+    totals: AccountTotalsResponse,
+}
+
+impl From<AccountCollection> for AccountCollectionResponse {
+    fn from(collection: AccountCollection) -> Self {
+        Self {
+            items: collection.items.into_iter().map(Into::into).collect(),
+            totals: collection.totals.into(),
         }
     }
 }

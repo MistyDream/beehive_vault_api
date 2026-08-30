@@ -117,10 +117,11 @@ Une catégorie possède un `kind` égal à `income` ou `expense`. La liste accep
 ## Comptes
 
 - `POST /v1/households/{household_id}/accounts` crée un compte et son premier solde de rapprochement dans une même transaction PostgreSQL ;
-- `GET /v1/households/{household_id}/accounts` liste les comptes actifs ;
-- `GET /v1/households/{household_id}/accounts/{account_id}` consulte un compte ;
+- `GET /v1/households/{household_id}/accounts` liste les comptes actifs ou archivés avec leurs sous-totaux ;
+- `GET /v1/households/{household_id}/accounts/{account_id}` consulte un compte actif ou archivé ;
 - `PATCH /v1/households/{household_id}/accounts/{account_id}` modifie son nom, son type ou son établissement ;
-- `DELETE /v1/households/{household_id}/accounts/{account_id}` l'archive.
+- `DELETE /v1/households/{household_id}/accounts/{account_id}` l'archive lorsque son solde calculé est nul ;
+- `POST /v1/households/{household_id}/accounts/{account_id}/restore` le restaure de manière idempotente.
 
 Le corps de création contient `name`, `kind`, `currency`, `initialBalance` et `balanceDate`. `institutionId` est facultatif.
 
@@ -134,7 +135,9 @@ Les transactions du jour du rapprochement sont considérées comme déjà inclus
 
 Le type peut changer au sein d'une même famille actif ou dette. Le passage entre ces deux familles est refusé dès que le compte possède une transaction, y compris supprimée logiquement.
 
-La cible du nouveau client ajoute les sous-totaux de ses trois groupes, la consultation des comptes archivés et leur restauration. Elle interdit également l'archivage d'un compte dont le solde calculé n'est pas nul. Ces comportements restent à implémenter et sont définis dans les [contrats du client](client-contracts.md#collection-des-comptes).
+La liste accepte `status=active` ou `status=archived`, avec `active` par défaut. Elle retourne `items` et les sous-totaux `daily`, `savings` et `liabilities`, calculés depuis `calculatedBalance` et représentés par des chaînes décimales à quatre chiffres après le séparateur. Un statut inconnu produit une erreur de validation de requête.
+
+Un compte archivé reste consultable mais ne peut plus être modifié ni recevoir de nouveau rapprochement avant sa restauration. L'archivage d'un compte dont `calculatedBalance` n'est pas exactement nul produit le conflit `account_balance_not_zero`.
 
 ## Soldes de rapprochement
 

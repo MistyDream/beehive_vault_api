@@ -18,6 +18,14 @@ pub enum AccountKind {
     OtherLiability,
 }
 
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountStatus {
+    #[default]
+    Active,
+    Archived,
+}
+
 impl AccountKind {
     pub fn as_str(self) -> &'static str {
         match self {

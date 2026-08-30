@@ -17,8 +17,9 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Technique | Erreurs HTTP Problem Details RFC 9457 | Textes humains en anglais, sans identifiant d'occurrence |
 | Foyer | Création, liste et consultation individuelle des foyers financiers | Un seul utilisateur, sans invitations ni permissions |
 | Établissements | Consultation du catalogue global configuré côté serveur | Administration explicite côté serveur, aucune écriture par l'API HTTP |
-| Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
+| Comptes | Création, consultation, collections actives ou archivées et modification | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
+| Comptes | Sous-totaux par rôle, archivage à solde nul et restauration | Les comptes archivés restent principalement en lecture seule |
 | Soldes | Solde initial, rapprochements datés et corrections | Dates non futures, nouveaux rapprochements strictement chronologiques |
 | Soldes | Solde courant calculé | Ajoute les transactions non supprimées strictement postérieures au rapprochement |
 | Patrimoine | Total des actifs, dettes et patrimoine net | Calculé depuis les soldes courants des comptes actifs |
@@ -34,13 +35,12 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est l'archivage, la restauration et les sous-totaux des comptes.
+Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est la consolidation des contrats des transactions.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Prérequis client | Cycle de vie des comptes | Fournir sous-totaux, archives et restauration |
 | Prérequis client | Contrats des transactions | Fournir pagination progressive, effet économique, précision monétaire et résumés de transfert sans calcul métier dans le navigateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |

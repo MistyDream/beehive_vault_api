@@ -169,6 +169,18 @@ async fn household_transfers_can_be_managed_atomically() {
 
     send_json(
         &application,
+        "POST",
+        &format!("/v1/households/{household_id}/accounts/{checking_id}/balances"),
+        json!({
+            "amount": "0.00",
+            "balanceDate": "2026-08-18",
+            "source": "reconciliation"
+        }),
+        StatusCode::CREATED,
+    )
+    .await;
+    send_json(
+        &application,
         "DELETE",
         &format!("/v1/households/{household_id}/accounts/{checking_id}"),
         Value::Null,
