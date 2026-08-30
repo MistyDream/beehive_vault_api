@@ -3,14 +3,14 @@ use axum::{Json, extract::State, http::StatusCode};
 use crate::{
     error::ApiError,
     extract::{ApiJson, ApiPath},
-    types::{AccountId, HouseholdId},
+    types::{AccountId, BalanceSnapshotId, HouseholdId},
 };
 
 use super::{
     AccountsModule,
     dto::{
         AccountResponse, BalanceResponse, CreateAccountRequest, CreateBalanceRequest,
-        UpdateAccountRequest,
+        UpdateAccountRequest, UpdateBalanceRequest,
     },
 };
 
@@ -83,4 +83,20 @@ pub(super) async fn list_balances(
         .list_balances(household_id, account_id)
         .await?;
     Ok(Json(balances.into_iter().map(Into::into).collect()))
+}
+
+pub(super) async fn update_balance(
+    State(module): State<AccountsModule>,
+    ApiPath((household_id, account_id, balance_id)): ApiPath<(
+        HouseholdId,
+        AccountId,
+        BalanceSnapshotId,
+    )>,
+    ApiJson(request): ApiJson<UpdateBalanceRequest>,
+) -> Result<Json<BalanceResponse>, ApiError> {
+    let balance = module
+        .service
+        .update_balance(household_id, account_id, balance_id, request.into())
+        .await?;
+    Ok(Json(balance.into()))
 }

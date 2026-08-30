@@ -5,6 +5,7 @@ use crate::{
     database::Database,
     types::{
         AccountBalance, AccountId, BalanceSnapshotId, CurrencyCode, HouseholdId, InstitutionId,
+        TimeZoneId,
     },
 };
 
@@ -37,6 +38,11 @@ macro_rules! account_select {
 #[derive(Clone)]
 pub struct AccountRepository {
     database: Database,
+}
+
+pub enum CreateBalanceOutcome {
+    Created(BalanceSnapshot),
+    NotAfterLatest,
 }
 
 impl AccountRepository {
@@ -118,6 +124,21 @@ impl AccountRepository {
             .bind(household_id)
             .fetch_optional(self.database.pool())
             .await
+    }
+
+    pub async fn household_timezone(
+        &self,
+        household_id: HouseholdId,
+    ) -> Result<Option<TimeZoneId>, sqlx::Error> {
+        let timezone =
+            sqlx::query_scalar::<_, String>("SELECT timezone FROM households WHERE id = $1")
+                .bind(household_id)
+                .fetch_optional(self.database.pool())
+                .await?;
+        timezone
+            .map(TimeZoneId::new)
+            .transpose()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))
     }
 
     pub async fn institution_exists(
@@ -282,7 +303,23 @@ impl AccountRepository {
         amount: AccountBalance,
         balance_date: NaiveDate,
         source: BalanceSource,
-    ) -> Result<BalanceSnapshot, sqlx::Error> {
+    ) -> Result<CreateBalanceOutcome, sqlx::Error> {
+        let mut transaction = self.database.begin_transaction().await?;
+        sqlx::query_scalar::<_, AccountId>("SELECT id FROM accounts WHERE id = $1 FOR UPDATE")
+            .bind(account_id)
+            .fetch_one(&mut *transaction)
+            .await?;
+        let latest_balance_date = sqlx::query_scalar::<_, Option<NaiveDate>>(
+            "SELECT max(balance_date) FROM account_balance_snapshots WHERE account_id = $1",
+        )
+        .bind(account_id)
+        .fetch_one(&mut *transaction)
+        .await?;
+        if latest_balance_date.is_some_and(|latest| balance_date <= latest) {
+            transaction.rollback().await?;
+            return Ok(CreateBalanceOutcome::NotAfterLatest);
+        }
+
         let row = sqlx::query_as::<_, BalanceRow>(
             "INSERT INTO account_balance_snapshots (id, account_id, amount, balance_date, source) \
          VALUES ($1, $2, $3, $4, $5) \
@@ -293,9 +330,11 @@ impl AccountRepository {
         .bind(amount)
         .bind(balance_date)
         .bind(source.as_str())
-        .fetch_one(self.database.pool())
+        .fetch_one(&mut *transaction)
         .await?;
-        BalanceSnapshot::try_from(row)
+        let balance = BalanceSnapshot::try_from(row)?;
+        transaction.commit().await?;
+        Ok(CreateBalanceOutcome::Created(balance))
     }
 
     pub async fn list_balances(
@@ -311,5 +350,51 @@ impl AccountRepository {
         .fetch_all(self.database.pool())
         .await?;
         rows.into_iter().map(BalanceSnapshot::try_from).collect()
+    }
+
+    pub async fn update_balance(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+        balance_id: BalanceSnapshotId,
+        amount: Option<AccountBalance>,
+        balance_date: Option<NaiveDate>,
+    ) -> Result<Option<BalanceSnapshot>, sqlx::Error> {
+        let mut transaction = self.database.begin_transaction().await?;
+        let account_exists = sqlx::query_scalar::<_, AccountId>(
+            "SELECT id FROM accounts \
+             WHERE household_id = $1 AND id = $2 AND archived_at IS NULL FOR UPDATE",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .fetch_optional(&mut *transaction)
+        .await?
+        .is_some();
+        if !account_exists {
+            transaction.rollback().await?;
+            return Ok(None);
+        }
+
+        let row = sqlx::query_as::<_, BalanceRow>(
+            "UPDATE account_balance_snapshots AS balance SET \
+             amount = COALESCE($4, balance.amount), \
+             balance_date = COALESCE($5, balance.balance_date) \
+             FROM accounts AS account \
+             WHERE balance.id = $3 AND balance.account_id = account.id \
+               AND account.id = $2 AND account.household_id = $1 \
+               AND account.archived_at IS NULL \
+             RETURNING balance.id, balance.account_id, balance.amount, \
+                       balance.balance_date, balance.source, balance.created_at",
+        )
+        .bind(household_id)
+        .bind(account_id)
+        .bind(balance_id)
+        .bind(amount)
+        .bind(balance_date)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let balance = row.map(BalanceSnapshot::try_from).transpose()?;
+        transaction.commit().await?;
+        Ok(balance)
     }
 }

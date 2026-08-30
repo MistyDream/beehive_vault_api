@@ -6,7 +6,9 @@ use crate::types::{
 };
 
 use super::domain::{Account, AccountKind, BalanceSnapshot, BalanceSource};
-use super::service::{CreateAccountCommand, CreateBalanceCommand, UpdateAccountCommand};
+use super::service::{
+    CreateAccountCommand, CreateBalanceCommand, UpdateAccountCommand, UpdateBalanceCommand,
+};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,6 +69,22 @@ impl From<CreateBalanceRequest> for CreateBalanceCommand {
             amount: request.amount,
             balance_date: request.balance_date,
             source: request.source,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateBalanceRequest {
+    amount: Option<AccountBalance>,
+    balance_date: Option<NaiveDate>,
+}
+
+impl From<UpdateBalanceRequest> for UpdateBalanceCommand {
+    fn from(request: UpdateBalanceRequest) -> Self {
+        Self {
+            amount: request.amount,
+            balance_date: request.balance_date,
         }
     }
 }

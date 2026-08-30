@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 
 use crate::{
     error::{ApiError, ProblemKind, required_text},
@@ -11,7 +11,7 @@ use super::{
     domain::{
         Account, AccountKind, BalanceSnapshot, BalanceSource, NewAccount, NewBalanceSnapshot,
     },
-    repository::AccountRepository,
+    repository::{AccountRepository, CreateBalanceOutcome},
 };
 
 pub struct CreateAccountCommand {
@@ -34,6 +34,18 @@ pub struct CreateBalanceCommand {
     pub amount: AccountBalance,
     pub balance_date: NaiveDate,
     pub source: Option<BalanceSource>,
+}
+
+#[derive(Default)]
+pub struct UpdateBalanceCommand {
+    pub amount: Option<AccountBalance>,
+    pub balance_date: Option<NaiveDate>,
+}
+
+impl UpdateBalanceCommand {
+    fn is_empty(&self) -> bool {
+        self.amount.is_none() && self.balance_date.is_none()
+    }
 }
 
 #[derive(Clone)]
@@ -64,6 +76,8 @@ impl AccountService {
                 format!("account currency must match household currency {household_currency}"),
             ));
         }
+        let current_date = self.current_date_for_household(household_id).await?;
+        validate_balance_date_not_future(command.balance_date, current_date)?;
         self.validate_institution(command.institution_id).await?;
 
         let account_id = AccountId::new();
@@ -176,7 +190,9 @@ impl AccountService {
         command: CreateBalanceCommand,
     ) -> Result<BalanceSnapshot, ApiError> {
         self.get(household_id, account_id).await?;
-        Ok(self
+        let current_date = self.current_date_for_household(household_id).await?;
+        validate_balance_date_not_future(command.balance_date, current_date)?;
+        match self
             .repository
             .create_balance(
                 BalanceSnapshotId::new(),
@@ -185,7 +201,15 @@ impl AccountService {
                 command.balance_date,
                 command.source.unwrap_or(BalanceSource::Manual),
             )
-            .await?)
+            .await?
+        {
+            CreateBalanceOutcome::Created(balance) => Ok(balance),
+            CreateBalanceOutcome::NotAfterLatest => Err(ApiError::body_validation(
+                "#/balanceDate",
+                "balance_date_not_after_latest",
+                "balance date must be strictly after the latest balance date",
+            )),
+        }
     }
 
     pub async fn list_balances(
@@ -195,6 +219,53 @@ impl AccountService {
     ) -> Result<Vec<BalanceSnapshot>, ApiError> {
         self.get(household_id, account_id).await?;
         Ok(self.repository.list_balances(account_id).await?)
+    }
+
+    pub async fn update_balance(
+        &self,
+        household_id: HouseholdId,
+        account_id: AccountId,
+        balance_id: BalanceSnapshotId,
+        command: UpdateBalanceCommand,
+    ) -> Result<BalanceSnapshot, ApiError> {
+        self.get(household_id, account_id).await?;
+        if command.is_empty() {
+            return Err(ApiError::body_validation(
+                "#/",
+                "empty_update",
+                "amount or balanceDate must be provided",
+            ));
+        }
+        if let Some(balance_date) = command.balance_date {
+            let current_date = self.current_date_for_household(household_id).await?;
+            validate_balance_date_not_future(balance_date, current_date)?;
+        }
+
+        self.repository
+            .update_balance(
+                household_id,
+                account_id,
+                balance_id,
+                command.amount,
+                command.balance_date,
+            )
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::BalanceNotFound))
+    }
+
+    async fn current_date_for_household(
+        &self,
+        household_id: HouseholdId,
+    ) -> Result<NaiveDate, ApiError> {
+        let timezone = self
+            .repository
+            .household_timezone(household_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::HouseholdNotFound))?;
+        timezone.date_at(Utc::now()).map_err(|_| {
+            ApiError::new(ProblemKind::InternalError)
+                .with_detail("The household timezone could not be evaluated.")
+        })
     }
 
     async fn validate_institution(
@@ -212,5 +283,38 @@ impl AccountService {
             ));
         }
         Ok(())
+    }
+}
+
+fn validate_balance_date_not_future(
+    balance_date: NaiveDate,
+    current_date: NaiveDate,
+) -> Result<(), ApiError> {
+    if balance_date > current_date {
+        return Err(ApiError::body_validation(
+            "#/balanceDate",
+            "balance_date_in_future",
+            "balance date must not be in the future for the household timezone",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_balance_update_is_detected() {
+        assert!(UpdateBalanceCommand::default().is_empty());
+    }
+
+    #[test]
+    fn future_balance_date_is_rejected() {
+        let current_date = NaiveDate::from_ymd_opt(2026, 8, 30).unwrap();
+        let future_date = NaiveDate::from_ymd_opt(2026, 8, 31).unwrap();
+
+        assert!(validate_balance_date_not_future(future_date, current_date).is_err());
+        assert!(validate_balance_date_not_future(current_date, current_date).is_ok());
     }
 }

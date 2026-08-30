@@ -19,7 +19,7 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Établissements | Consultation du catalogue global configuré côté serveur | Administration explicite côté serveur, aucune écriture par l'API HTTP |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
-| Soldes | Solde initial et soldes de rapprochement datés | Le rapprochement le plus récent sert de point d'ancrage |
+| Soldes | Solde initial, rapprochements datés et corrections | Dates non futures, nouveaux rapprochements strictement chronologiques |
 | Soldes | Solde courant calculé | Ajoute les transactions non supprimées strictement postérieures au rapprochement |
 | Patrimoine | Total des actifs, dettes et patrimoine net | Calculé depuis les soldes courants des comptes actifs |
 | Catégories | Catalogue initial propre à chaque foyer | Pas de sous-catégories |
@@ -34,13 +34,13 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est le cycle de vie des comptes et soldes.
+Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est l'archivage, la restauration et les sous-totaux des comptes.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Prérequis client | Cycle de vie des comptes et soldes | Fournir sous-totaux, archives, restauration, corrections et validations de date |
+| Prérequis client | Cycle de vie des comptes | Fournir sous-totaux, archives et restauration |
 | Prérequis client | Contrats des transactions | Fournir pagination progressive, effet économique, précision monétaire et résumés de transfert sans calcul métier dans le navigateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |

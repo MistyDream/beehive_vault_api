@@ -83,6 +83,7 @@ cargo test --test category_management -- --ignored
 cargo test --test transaction_management -- --ignored
 cargo test --test transfer_management -- --ignored
 cargo test --test calculated_balance -- --ignored
+cargo test --test balance_lifecycle -- --ignored
 cargo test --test monthly_flows -- --ignored
 cargo test --test institution_catalog -- --ignored
 ```

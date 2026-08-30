@@ -6,7 +6,7 @@ mod service;
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 
 use crate::database::Database;
@@ -43,6 +43,10 @@ pub(crate) fn routes(module: AccountsModule) -> Router {
         .route(
             "/households/{household_id}/accounts/{account_id}/balances",
             post(handlers::create_balance).get(handlers::list_balances),
+        )
+        .route(
+            "/households/{household_id}/accounts/{account_id}/balances/{balance_id}",
+            patch(handlers::update_balance),
         )
         .with_state(module)
 }

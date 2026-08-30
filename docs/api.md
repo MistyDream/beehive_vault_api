@@ -59,6 +59,7 @@ Le catalogue stable des problèmes généraux et métier est le suivant. La vale
 | 404 | `household-not-found` | `household_not_found` |
 | 404 | `institution-not-found` | `institution_not_found` |
 | 404 | `account-not-found` | `account_not_found` |
+| 404 | `balance-not-found` | `balance_not_found` |
 | 404 | `category-not-found` | `category_not_found` |
 | 404 | `transaction-not-found` | `transaction_not_found` |
 | 404 | `transfer-not-found` | `transfer_not_found` |
@@ -138,11 +139,14 @@ La cible du nouveau client ajoute les sous-totaux de ses trois groupes, la consu
 ## Soldes de rapprochement
 
 - `POST /v1/households/{household_id}/accounts/{account_id}/balances` ajoute un solde daté ;
-- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien.
+- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien ;
+- `PATCH /v1/households/{household_id}/accounts/{account_id}/balances/{balance_id}` corrige le montant, la date ou les deux.
+
+Le solde initial et chaque rapprochement doivent être antérieurs ou égaux à la date actuelle dans le fuseau du foyer. Un nouveau rapprochement doit aussi être strictement postérieur au dernier. Les erreurs de champ utilisent respectivement `balance_date_in_future` et `balance_date_not_after_latest`.
+
+Le corps de correction accepte `amount`, `balanceDate` ou les deux et refuse une mise à jour vide. La source originale reste inchangée. Une date corrigée peut précéder un autre rapprochement, mais ne peut être ni future, ni déjà utilisée par le même compte. Un identifiant de solde inconnu produit `balance_not_found`.
 
 Les sources acceptées sont `manual`, `import`, `synchronization` et `reconciliation`.
-
-La correction d'un solde existant, le refus des dates futures et l'obligation qu'un nouveau rapprochement soit postérieur au dernier appartiennent au [contrat cible](client-contracts.md#soldes-de-rapprochement).
 
 ## Transactions
 

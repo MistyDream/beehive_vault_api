@@ -22,6 +22,7 @@ pub enum ProblemKind {
     HouseholdNotFound,
     InstitutionNotFound,
     AccountNotFound,
+    BalanceNotFound,
     CategoryNotFound,
     TransactionNotFound,
     TransferNotFound,
@@ -47,6 +48,7 @@ impl ProblemKind {
             Self::HouseholdNotFound => "household-not-found",
             Self::InstitutionNotFound => "institution-not-found",
             Self::AccountNotFound => "account-not-found",
+            Self::BalanceNotFound => "balance-not-found",
             Self::CategoryNotFound => "category-not-found",
             Self::TransactionNotFound => "transaction-not-found",
             Self::TransferNotFound => "transfer-not-found",
@@ -72,6 +74,7 @@ impl ProblemKind {
             Self::HouseholdNotFound => "household_not_found",
             Self::InstitutionNotFound => "institution_not_found",
             Self::AccountNotFound => "account_not_found",
+            Self::BalanceNotFound => "balance_not_found",
             Self::CategoryNotFound => "category_not_found",
             Self::TransactionNotFound => "transaction_not_found",
             Self::TransferNotFound => "transfer_not_found",
@@ -97,6 +100,7 @@ impl ProblemKind {
             Self::HouseholdNotFound => "Household not found",
             Self::InstitutionNotFound => "Institution not found",
             Self::AccountNotFound => "Account not found",
+            Self::BalanceNotFound => "Balance not found",
             Self::CategoryNotFound => "Category not found",
             Self::TransactionNotFound => "Transaction not found",
             Self::TransferNotFound => "Transfer not found",
@@ -121,6 +125,7 @@ impl ProblemKind {
             | Self::HouseholdNotFound
             | Self::InstitutionNotFound
             | Self::AccountNotFound
+            | Self::BalanceNotFound
             | Self::CategoryNotFound
             | Self::TransactionNotFound
             | Self::TransferNotFound => StatusCode::NOT_FOUND,
