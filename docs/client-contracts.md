@@ -19,7 +19,7 @@ Tant qu'un contrat décrit ici n'est pas annoncé comme disponible dans le [cata
 
 ## Pagination
 
-Les collections paginées conservent les paramètres `page` et `limit` définis par l'[ADR-0006](adr/0006-page-based-pagination). Leur réponse utilise l'enveloppe suivante :
+Les collections paginées conservent les paramètres `page` et `limit` définis par l'[ADR-0006](adr/0006-page-based-pagination.md). L'enveloppe et son `total` exact suivent l'[ADR-0009](adr/0009-stabilize-web-client-contracts.md) :
 
 ```json
 {

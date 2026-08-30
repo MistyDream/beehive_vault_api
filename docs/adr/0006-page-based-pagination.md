@@ -3,6 +3,7 @@
 - Statut : Accepté
 - Date : 2026-08-17
 - Remplace partiellement : ADR-0005, section « Consultation et pagination »
+- Remplacé partiellement par : [ADR-0009](0009-stabilize-web-client-contracts.md), absence de total dans les collections paginées
 
 ## Contexte
 
@@ -34,6 +35,10 @@ des repositories et n'est pas exposé dans le contrat HTTP.
 
 Le nombre total d'éléments n'est pas calculé systématiquement. Une pagination
 par curseur pourra remplacer cette stratégie si le volume réel le justifie.
+
+> Mise à jour : cette absence de total est remplacée par l'ADR-0009. Les
+> collections paginées destinées au nouveau client Web retournent une enveloppe
+> contenant un `total` exact.
 
 ## Conséquences positives
 
