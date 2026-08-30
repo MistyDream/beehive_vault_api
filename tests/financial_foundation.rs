@@ -9,6 +9,7 @@ use beehive_vault_api::app;
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 #[tokio::test]
 #[ignore = "requires the local PostgreSQL test database"]
@@ -25,7 +26,28 @@ async fn financial_foundation_calculates_net_worth() {
         .run(&db)
         .await
         .expect("test migrations should succeed");
+    let institution_id = Uuid::now_v7();
+    let institution_name = format!("Example Bank {institution_id}");
+    sqlx::query("INSERT INTO institutions (id, name) VALUES ($1, $2)")
+        .bind(institution_id)
+        .bind(&institution_name)
+        .execute(&db)
+        .await
+        .expect("test institution should be created");
     let application = app::build(db.clone());
+
+    let institutions = send_json(
+        &application,
+        "GET",
+        "/v1/institutions",
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert!(institutions.as_array().unwrap().iter().any(|institution| {
+        institution["id"] == institution_id.to_string()
+            && institution["name"] == institution_name.as_str()
+    }));
 
     let household = send_json(
         &application,
@@ -41,15 +63,25 @@ async fn financial_foundation_calculates_net_worth() {
     .await;
     let household_id = household["id"].as_str().unwrap();
 
-    let institution = send_json(
+    let invalid_institution = send_json(
         &application,
         "POST",
-        &format!("/v1/households/{household_id}/institutions"),
-        json!({ "name": "Example Bank" }),
-        StatusCode::CREATED,
+        &format!("/v1/households/{household_id}/accounts"),
+        json!({
+            "institutionId": Uuid::now_v7(),
+            "name": "Invalid institution account",
+            "kind": "checking",
+            "currency": "EUR",
+            "initialBalance": "0.00",
+            "balanceDate": "2026-08-10"
+        }),
+        StatusCode::UNPROCESSABLE_ENTITY,
     )
     .await;
-    let institution_id = institution["id"].as_str().unwrap();
+    assert_eq!(
+        invalid_institution["errors"][0]["code"],
+        "invalid_institution"
+    );
 
     let asset = send_json(
         &application,
@@ -101,6 +133,11 @@ async fn financial_foundation_calculates_net_worth() {
         .execute(&db)
         .await
         .expect("test household cleanup should succeed");
+    sqlx::query("DELETE FROM institutions WHERE id = $1")
+        .bind(institution_id)
+        .execute(&db)
+        .await
+        .expect("test institution cleanup should succeed");
 }
 
 async fn send_json(

@@ -254,7 +254,7 @@ impl From<sqlx::Error> for ApiError {
         let database_error = error.as_database_error();
         let constraint = database_error.and_then(|database_error| database_error.constraint());
         let known_problem = match constraint {
-            Some("institutions_active_name_unique") => Some(ProblemKind::DuplicateInstitutionName),
+            Some("institutions_name_unique") => Some(ProblemKind::DuplicateInstitutionName),
             Some("categories_active_name_unique") => Some(ProblemKind::DuplicateCategoryName),
             Some("account_balance_snapshots_account_id_balance_date_key") => {
                 Some(ProblemKind::DuplicateBalanceDate)

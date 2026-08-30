@@ -120,19 +120,14 @@ impl AccountRepository {
             .await
     }
 
-    pub async fn active_institution_exists(
+    pub async fn institution_exists(
         &self,
-        household_id: HouseholdId,
         institution_id: InstitutionId,
     ) -> Result<bool, sqlx::Error> {
-        sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM institutions \
-             WHERE household_id = $1 AND id = $2 AND archived_at IS NULL)",
-        )
-        .bind(household_id)
-        .bind(institution_id)
-        .fetch_one(self.database.pool())
-        .await
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM institutions WHERE id = $1)")
+            .bind(institution_id)
+            .fetch_one(self.database.pool())
+            .await
     }
 
     pub async fn create(

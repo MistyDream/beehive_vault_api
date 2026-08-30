@@ -32,7 +32,10 @@ Un établissement référencé ne signifie pas qu'il est synchronisable. Une fut
 
 Un établissement absent ne produit pas automatiquement une nouvelle entrée. Une future fonction de signalement pourra enregistrer le besoin afin que le catalogue soit enrichi de manière contrôlée.
 
-Cette décision décrit le contrat cible. Tant que sa migration n'est pas implémentée, les routes d'établissements propres au foyer restent le comportement réel de l'API.
+Le catalogue est administré hors de l'API HTTP avec un outil serveur explicite.
+Cet outil permet de lister, ajouter et renommer une entrée, ainsi que d'importer un fichier JSON de manière additive et réentrante. L'import ne renomme ni ne supprime une entrée absente du fichier. Il n'est jamais exécuté implicitement au démarrage de l'API. La base reste ainsi la source de vérité après l'import et l'identifiant d'une entrée demeure stable lors d'un renommage.
+
+La migration regroupe les anciennes entrées sans distinction de casse, rattache les comptes à leur identité globale et retire les routes d'établissements propres au foyer. Une installation neuve reçoit le catalogue initial lorsque l'administrateur déclenche son import.
 
 ## Conséquences positives
 
@@ -45,7 +48,7 @@ Cette décision décrit le contrat cible. Tant que sa migration n'est pas implé
 ## Conséquences négatives
 
 - l'utilisateur ne peut pas ajouter immédiatement un établissement inconnu ;
-- le catalogue demande un mécanisme d'initialisation et de maintenance ;
+- l'initialisation et la maintenance du catalogue demandent une opération serveur explicite ;
 - les routes, contraintes et données actuellement rattachées aux foyers devront être migrées ;
 - plusieurs établissements proches ou marques d'un même groupe demanderont une règle éditoriale cohérente ;
 - une installation personnalisée devra modifier le catalogue côté serveur.

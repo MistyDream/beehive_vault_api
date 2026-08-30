@@ -1,6 +1,6 @@
 # Contrats API du nouveau client Web
 
-- Statut : cible validée, implémentation planifiée
+- Statut : cible validée, implémentation partielle
 - Date : 2026-08-23
 
 Ce document stabilise les contrats nécessaires aux premiers parcours du nouveau client Web. Il complète la [vue d'ensemble de l'API](api.md) et détaille les évolutions qui seront implémentées avant que le client dépende de ces réponses.
@@ -266,7 +266,7 @@ Les dates futures et les dates qui ne sont pas postérieures au dernier solde ut
 
 ## Catalogue global d'établissements
 
-Le contrat cible de l'[ADR-0008](adr/0008-global-financial-institution-catalog) est :
+Le contrat de l'[ADR-0008](adr/0008-global-financial-institution-catalog.md) est désormais disponible :
 
 ```text
 GET /v1/institutions
@@ -283,7 +283,8 @@ La réponse est une collection non paginée et ordonnée par nom :
 ]
 ```
 
-Les routes de création, modification et archivage propres au foyer disparaissent après la migration. Les entrées existantes sont regroupées sans distinction de casse et les comptes sont rattachés à leur entrée globale. Une installation neuve commence avec un catalogue vide tant qu'aucune configuration serveur n'est fournie ; l'absence d'établissement ne bloque jamais un compte.
+Les routes de création, modification et archivage propres au foyer ont disparu.
+Les entrées existantes sont regroupées sans distinction de casse et les comptes sont rattachés à leur entrée globale. Une installation neuve commence avec un catalogue vide tant que l'administrateur n'a pas appliqué le catalogue initial fourni côté serveur ; l'absence d'établissement ne bloque jamais un compte.
 
 ## Catégories et icônes
 
@@ -294,8 +295,8 @@ Le client garantit un pictogramme neutre pour toute catégorie. Cette décision 
 
 Les lots suivants appliqueront ce contrat dans cet ordre :
 
-1. catalogue global d'établissements ;
-2. comptes archivés, restauration et correction des soldes ;
-3. collection consolidée, montants, résumés incorporés et pagination.
+1. catalogue global d'établissements : disponible ;
+2. comptes archivés, restauration et correction des soldes : planifié ;
+3. collection consolidée, montants, résumés incorporés et pagination : planifié.
 
 Chaque lot mettra à jour `api.md`, le catalogue des fonctionnalités et les tests au moment où son comportement deviendra réellement disponible.

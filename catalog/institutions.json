@@ -1,0 +1,20 @@
+{
+  "institutions": [
+    { "name": "Banque Populaire" },
+    { "name": "BNP Paribas" },
+    { "name": "BoursoBank" },
+    { "name": "Caisse d'Épargne" },
+    { "name": "CIC" },
+    { "name": "Crédit Agricole" },
+    { "name": "Crédit Mutuel" },
+    { "name": "Fortuneo" },
+    { "name": "Hello bank!" },
+    { "name": "La Banque Postale" },
+    { "name": "LCL" },
+    { "name": "N26" },
+    { "name": "Revolut" },
+    { "name": "SG" },
+    { "name": "Trade Republic" },
+    { "name": "Wise" }
+  ]
+}

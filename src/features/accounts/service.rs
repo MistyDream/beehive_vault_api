@@ -64,8 +64,7 @@ impl AccountService {
                 format!("account currency must match household currency {household_currency}"),
             ));
         }
-        self.validate_institution(household_id, command.institution_id)
-            .await?;
+        self.validate_institution(command.institution_id).await?;
 
         let account_id = AccountId::new();
         self.repository
@@ -140,8 +139,7 @@ impl AccountService {
             .map(|name| required_text(name, "name"))
             .transpose()?;
         if !command.remove_institution {
-            self.validate_institution(household_id, command.institution_id)
-                .await?;
+            self.validate_institution(command.institution_id).await?;
         }
         let affected = self
             .repository
@@ -201,21 +199,16 @@ impl AccountService {
 
     async fn validate_institution(
         &self,
-        household_id: HouseholdId,
         institution_id: Option<InstitutionId>,
     ) -> Result<(), ApiError> {
         let Some(institution_id) = institution_id else {
             return Ok(());
         };
-        if !self
-            .repository
-            .active_institution_exists(household_id, institution_id)
-            .await?
-        {
+        if !self.repository.institution_exists(institution_id).await? {
             return Err(ApiError::body_validation(
                 "#/institutionId",
                 "invalid_institution",
-                "institution must be active and belong to the household",
+                "institution must exist in the global catalog",
             ));
         }
         Ok(())

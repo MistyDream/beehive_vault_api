@@ -89,15 +89,19 @@ L'API ne possède pas encore d'authentification ni d'autorisation : la liste con
 
 ## Établissements
 
-Le contrat actuellement implémenté reste :
+`GET /v1/institutions` retourne le catalogue global configuré côté serveur. La
+collection n'est pas paginée, peut être vide et contient uniquement `id` et
+`name`. Elle est ordonnée par nom sans distinction de casse, puis par nom et
+identifiant.
 
-- `POST /v1/households/{household_id}/institutions` crée un établissement ;
-- `GET /v1/households/{household_id}/institutions` liste les établissements ;
-- `PATCH /v1/households/{household_id}/institutions/{institution_id}` le renomme ;
-- `DELETE /v1/households/{household_id}/institutions/{institution_id}` l'archive.
+Un compte référence facultativement une entrée globale avec `institutionId`.
+Le client ne peut ni créer, ni renommer, ni archiver un établissement. Les
+anciennes routes propres au foyer ont été retirées conformément à
+l'[ADR-0008](adr/0008-global-financial-institution-catalog.md).
 
-L'[ADR-0008](adr/0008-global-financial-institution-catalog.md) remplace ce modèle par un catalogue global configuré côté serveur et exposé à terme avec `GET /v1/institutions`. Cette migration doit précéder l'intégration des comptes
-par le nouveau client web. Sa représentation cible minimale `{ id, name }` et la migration des références existantes sont précisées dans les [contrats du client](client-contracts.md#catalogue-global-détablissements).
+La maintenance du catalogue reste hors de l'API HTTP. Le binaire serveur `beehive_vault_admin` permet de lister, ajouter, renommer et importer des établissements. L'import initial est additif, réentrant et déclenché explicitement ; il ne supprime ni ne renomme les entrées déjà stockées. Son utilisation est décrite dans le [guide de développement](development.md#administrer-le-catalogue-détablissements).
+
+La migration regroupe les anciennes entrées par nom normalisé sans distinction de casse, conserve la plus ancienne comme identité canonique et rattache les comptes existants à celle-ci. La représentation est également décrite dans les [contrats du client](client-contracts.md#catalogue-global-détablissements).
 
 ## Catégories
 

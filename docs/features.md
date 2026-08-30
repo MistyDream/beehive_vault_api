@@ -16,7 +16,7 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Technique | Vérification de vivacité et de disponibilité de PostgreSQL | API locale sans authentification |
 | Technique | Erreurs HTTP Problem Details RFC 9457 | Textes humains en anglais, sans identifiant d'occurrence |
 | Foyer | Création, liste et consultation individuelle des foyers financiers | Un seul utilisateur, sans invitations ni permissions |
-| Établissements | Création, liste, renommage et archivage par foyer | Modèle actuel à remplacer par le catalogue global de l'ADR-0008 |
+| Établissements | Consultation du catalogue global configuré côté serveur | Administration explicite côté serveur, aucune écriture par l'API HTTP |
 | Comptes | Création, consultation, liste, modification et archivage | Devise identique à celle du foyer |
 | Comptes | Gestion des comptes d'actif et de dette | Pas de positions détaillées pour les investissements |
 | Soldes | Solde initial et soldes de rapprochement datés | Le rapprochement le plus récent sert de point d'ancrage |
@@ -34,13 +34,12 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. La prochaine étape retenue est la configuration et la prévisualisation des imports CSV.
+Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est le cycle de vie des comptes et soldes.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Prérequis client | Catalogue global d'établissements | Fournir une référence facultative et cohérente aux comptes |
 | Prérequis client | Cycle de vie des comptes et soldes | Fournir sous-totaux, archives, restauration, corrections et validations de date |
 | Prérequis client | Contrats des transactions | Fournir pagination progressive, effet économique, précision monétaire et résumés de transfert sans calcul métier dans le navigateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |

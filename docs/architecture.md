@@ -21,6 +21,8 @@ Le code est organisé par fonctionnalité plutôt que par couche technique :
 ```text
 src/
 ├── app.rs
+├── bin/
+│   └── beehive_vault_admin.rs
 ├── config.rs
 ├── database.rs
 ├── main.rs
@@ -34,6 +36,8 @@ src/
 ```
 
 Chaque module fonctionnel possède sa configuration, son état Axum et ses routes. Il expose `configure(database)` pour construire ses dépendances et `routes(module)` pour produire son routeur. `app.rs` assemble ces routeurs et applique les préoccupations globales telles que le préfixe `/v1`.
+
+Le binaire `beehive_vault_admin` porte les opérations serveur qui ne doivent pas être exposées par HTTP. Il réutilise les services des modules fonctionnels et la même configuration PostgreSQL que l'API.
 
 Le type `Database` encapsule le pool PostgreSQL. Il fournit l'accès au pool pour les requêtes simples et l'ouverture explicite d'une transaction pour les opérations atomiques. Chaque module reçoit un clone léger de `Database` lors de sa configuration ; aucun état global Axum n'est partagé entre tous les modules.
 

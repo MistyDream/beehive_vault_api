@@ -174,6 +174,22 @@ mod tests {
             "urn:beehive-vault:problem:route-not-found",
         );
 
+        let (legacy_status, legacy_content_type, legacy_problem) = send_request(
+            "GET",
+            "/v1/households/00000000-0000-0000-0000-000000000000/institutions",
+            None,
+            "",
+        )
+        .await;
+        assert_problem(
+            legacy_status,
+            &legacy_content_type,
+            &legacy_problem,
+            StatusCode::NOT_FOUND,
+            "route_not_found",
+            "urn:beehive-vault:problem:route-not-found",
+        );
+
         let (method_status, method_content_type, method_problem) =
             send_request("DELETE", "/v1/households", None, "").await;
         assert_problem(

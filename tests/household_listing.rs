@@ -54,15 +54,16 @@ async fn households_can_be_listed_for_active_household_resolution() {
     let empty_households = get_json(&application, "/v1/households", StatusCode::OK).await;
     assert_eq!(empty_households, json!([]));
 
-    for collection in ["accounts", "institutions"] {
-        let problem = get_json(
-            &application,
-            &format!("/v1/households/00000000-0000-0000-0000-000000000000/{collection}"),
-            StatusCode::NOT_FOUND,
-        )
-        .await;
-        assert_eq!(problem["code"], "household_not_found");
-    }
+    let problem = get_json(
+        &application,
+        "/v1/households/00000000-0000-0000-0000-000000000000/accounts",
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+    assert_eq!(problem["code"], "household_not_found");
+
+    let institutions = get_json(&application, "/v1/institutions", StatusCode::OK).await;
+    assert_eq!(institutions, json!([]));
 
     let second_alphabetically = create_household(&application, "zebra household").await;
     let first_alphabetically = create_household(&application, "Alpha household").await;

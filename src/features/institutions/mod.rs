@@ -1,9 +1,7 @@
+pub mod admin;
 mod handlers;
 
-use axum::{
-    Router,
-    routing::{patch, post},
-};
+use axum::{Router, routing::get};
 
 use crate::database::Database;
 
@@ -18,13 +16,6 @@ pub(crate) fn configure(database: Database) -> InstitutionsModule {
 
 pub(crate) fn routes(module: InstitutionsModule) -> Router {
     Router::new()
-        .route(
-            "/households/{household_id}/institutions",
-            post(handlers::create).get(handlers::list),
-        )
-        .route(
-            "/households/{household_id}/institutions/{institution_id}",
-            patch(handlers::update).delete(handlers::archive),
-        )
+        .route("/institutions", get(handlers::list))
         .with_state(module)
 }
