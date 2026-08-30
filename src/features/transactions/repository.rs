@@ -5,13 +5,19 @@ use rust_decimal::Decimal;
 
 use crate::{
     database::Database,
+    features::{accounts::AccountKind, categories::CategoryKind},
     pagination::Pagination,
     types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId},
 };
 
 use super::domain::{
-    NewTransaction, Transaction, TransactionAmount, TransactionDetails, TransactionLabel,
-    TransactionNature, TransactionNote, TransactionSource, TransactionUpdate, TransferRole,
+    NewTransaction, Transaction, TransactionAmount, TransactionAmounts, TransactionDetails,
+    TransactionLabel, TransactionNature, TransactionNominalAmount, TransactionNote,
+    TransactionSource, TransactionUpdate, TransferRole,
+};
+use super::operations::{
+    AccountSummary, CategorySummary, Operation, TransactionOperation, TransferMovementOperation,
+    TransferOperation,
 };
 
 #[derive(Debug, Clone)]
@@ -89,28 +95,104 @@ impl TransactionRepository {
         row.map(Transaction::try_from).transpose()
     }
 
-    pub async fn list(
+    pub async fn list_operations(
         &self,
         household_id: HouseholdId,
         filters: &TransactionFilters,
-    ) -> Result<Vec<Transaction>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, TransactionRow>(
-            "SELECT id, household_id, account_id, booking_date, label, amount, nature, \
-             category_id, transfer_id, transfer_role, note, source, created_at, updated_at, \
-             deleted_at FROM transactions \
-             WHERE household_id = $1 AND deleted_at IS NULL \
-               AND ($2::uuid IS NULL OR account_id = $2) \
-               AND ($3::date IS NULL OR booking_date >= $3) \
-               AND ($4::date IS NULL OR booking_date <= $4) \
-               AND ($5::text IS NULL OR nature = $5) \
-               AND ($6::uuid IS NULL OR category_id = $6) \
-               AND (NOT $7 OR (category_id IS NULL AND nature <> 'transfer')) \
-               AND ($8::text IS NULL OR source = $8) \
+    ) -> Result<(Vec<Operation>, i64), sqlx::Error> {
+        let rows = sqlx::query_as::<_, OperationRow>(
+            "WITH matching_operations AS ( \
+             SELECT 'transaction'::text AS operation_type, transaction.id AS operation_id, \
+                    transaction.booking_date, transaction.created_at, transaction.updated_at \
+             FROM transactions AS transaction \
+             WHERE transaction.household_id = $1 AND transaction.deleted_at IS NULL \
+               AND transaction.transfer_id IS NULL \
+               AND ($2::uuid IS NULL OR transaction.account_id = $2) \
+               AND ($3::date IS NULL OR transaction.booking_date >= $3) \
+               AND ($4::date IS NULL OR transaction.booking_date <= $4) \
+               AND ($5::text IS NULL OR transaction.nature = $5) \
+               AND ($6::uuid IS NULL OR transaction.category_id = $6) \
+               AND (NOT $7 OR transaction.category_id IS NULL) \
+               AND ($8::text IS NULL OR transaction.source = $8) \
                AND ($9::text IS NULL \
-                    OR strpos(lower(label), lower($9)) > 0 \
-                    OR strpos(lower(COALESCE(note, '')), lower($9)) > 0) \
-             ORDER BY booking_date DESC, created_at DESC, id DESC \
-             LIMIT $10 OFFSET $11",
+                    OR strpos(lower(transaction.label), lower($9)) > 0 \
+                    OR strpos(lower(COALESCE(transaction.note, '')), lower($9)) > 0) \
+             UNION ALL \
+             SELECT 'transfer'::text, transfer.id, source.booking_date, \
+                    transfer.created_at, transfer.updated_at \
+             FROM transfers AS transfer \
+             JOIN transactions AS source ON source.transfer_id = transfer.id \
+               AND source.transfer_role = 'source' AND source.deleted_at IS NULL \
+             JOIN transactions AS destination ON destination.transfer_id = transfer.id \
+               AND destination.transfer_role = 'destination' AND destination.deleted_at IS NULL \
+             WHERE transfer.household_id = $1 AND transfer.deleted_at IS NULL \
+               AND ($2::uuid IS NULL \
+                    OR source.account_id = $2 OR destination.account_id = $2) \
+               AND ($3::date IS NULL OR source.booking_date >= $3) \
+               AND ($4::date IS NULL OR source.booking_date <= $4) \
+               AND ($5::text IS NULL OR $5 = 'transfer') \
+               AND $6::uuid IS NULL AND NOT $7 \
+               AND ($8::text IS NULL OR $8 = 'manual') \
+               AND ($9::text IS NULL \
+                    OR strpos(lower(source.label), lower($9)) > 0 \
+                    OR strpos(lower(COALESCE(source.note, '')), lower($9)) > 0 \
+                    OR strpos(lower(destination.label), lower($9)) > 0 \
+                    OR strpos(lower(COALESCE(destination.note, '')), lower($9)) > 0) \
+             ) \
+             SELECT operation_total.total, operation.operation_type, operation.operation_id, \
+                    operation.booking_date, operation.created_at, operation.updated_at, \
+                    COALESCE(transaction.household_id, transfer.household_id) AS household_id, \
+                    transaction.label AS transaction_label, \
+                    transaction.amount AS transaction_amount, \
+                    transaction.nature AS transaction_nature, \
+                    transaction.source AS transaction_origin, \
+                    transaction.note AS transaction_note, \
+                    transaction_account.id AS transaction_account_id, \
+                    transaction_account.name AS transaction_account_name, \
+                    transaction_account.kind AS transaction_account_kind, \
+                    transaction_account.archived_at IS NOT NULL AS transaction_account_archived, \
+                    category.id AS category_id, category.name AS category_name, \
+                    category.kind AS category_kind, \
+                    category.archived_at IS NOT NULL AS category_archived, \
+                    source.id AS source_transaction_id, \
+                    source.booking_date AS source_booking_date, source.label AS source_label, \
+                    source.amount AS source_account_amount, source.note AS source_note, \
+                    source_account.id AS source_account_id, \
+                    source_account.name AS source_account_name, \
+                    source_account.kind AS source_account_kind, \
+                    source_account.archived_at IS NOT NULL AS source_account_archived, \
+                    destination.id AS destination_transaction_id, \
+                    destination.booking_date AS destination_booking_date, \
+                    destination.label AS destination_label, \
+                    destination.amount AS destination_account_amount, \
+                    destination.note AS destination_note, \
+                    destination_account.id AS destination_account_id, \
+                    destination_account.name AS destination_account_name, \
+                    destination_account.kind AS destination_account_kind, \
+                    destination_account.archived_at IS NOT NULL AS destination_account_archived \
+             FROM (SELECT count(*) AS total FROM matching_operations) AS operation_total \
+             LEFT JOIN LATERAL ( \
+               SELECT * FROM matching_operations \
+               ORDER BY booking_date DESC, created_at DESC, operation_id DESC \
+               LIMIT $10 OFFSET $11 \
+             ) AS operation ON true \
+             LEFT JOIN transactions AS transaction \
+               ON operation.operation_type = 'transaction' \
+              AND transaction.id = operation.operation_id \
+             LEFT JOIN accounts AS transaction_account \
+               ON transaction_account.id = transaction.account_id \
+             LEFT JOIN categories AS category ON category.id = transaction.category_id \
+             LEFT JOIN transfers AS transfer \
+               ON operation.operation_type = 'transfer' AND transfer.id = operation.operation_id \
+             LEFT JOIN transactions AS source ON source.transfer_id = transfer.id \
+               AND source.transfer_role = 'source' AND source.deleted_at IS NULL \
+             LEFT JOIN accounts AS source_account ON source_account.id = source.account_id \
+             LEFT JOIN transactions AS destination ON destination.transfer_id = transfer.id \
+               AND destination.transfer_role = 'destination' AND destination.deleted_at IS NULL \
+             LEFT JOIN accounts AS destination_account \
+               ON destination_account.id = destination.account_id \
+             ORDER BY operation.booking_date DESC, operation.created_at DESC, \
+                      operation.operation_id DESC",
         )
         .bind(household_id)
         .bind(filters.account_id)
@@ -126,7 +208,12 @@ impl TransactionRepository {
         .fetch_all(self.database.pool())
         .await?;
 
-        rows.into_iter().map(Transaction::try_from).collect()
+        let total = rows.first().map_or(0, |row| row.total);
+        let operations = rows
+            .into_iter()
+            .filter_map(|row| row.try_into_operation().transpose())
+            .collect::<Result<_, _>>()?;
+        Ok((operations, total))
     }
 
     pub async fn update_regular(
@@ -197,6 +284,185 @@ struct TransactionRow {
     updated_at: DateTime<Utc>,
     deleted_at: Option<DateTime<Utc>>,
 }
+
+#[derive(sqlx::FromRow)]
+struct OperationRow {
+    total: i64,
+    operation_type: Option<String>,
+    operation_id: Option<uuid::Uuid>,
+    booking_date: Option<NaiveDate>,
+    created_at: Option<DateTime<Utc>>,
+    updated_at: Option<DateTime<Utc>>,
+    household_id: Option<HouseholdId>,
+    transaction_label: Option<String>,
+    transaction_amount: Option<Decimal>,
+    transaction_nature: Option<String>,
+    transaction_origin: Option<String>,
+    transaction_note: Option<String>,
+    transaction_account_id: Option<AccountId>,
+    transaction_account_name: Option<String>,
+    transaction_account_kind: Option<String>,
+    transaction_account_archived: bool,
+    category_id: Option<CategoryId>,
+    category_name: Option<String>,
+    category_kind: Option<String>,
+    category_archived: bool,
+    source_transaction_id: Option<TransactionId>,
+    source_booking_date: Option<NaiveDate>,
+    source_label: Option<String>,
+    source_account_amount: Option<Decimal>,
+    source_note: Option<String>,
+    source_account_id: Option<AccountId>,
+    source_account_name: Option<String>,
+    source_account_kind: Option<String>,
+    source_account_archived: bool,
+    destination_transaction_id: Option<TransactionId>,
+    destination_booking_date: Option<NaiveDate>,
+    destination_label: Option<String>,
+    destination_account_amount: Option<Decimal>,
+    destination_note: Option<String>,
+    destination_account_id: Option<AccountId>,
+    destination_account_name: Option<String>,
+    destination_account_kind: Option<String>,
+    destination_account_archived: bool,
+}
+
+impl OperationRow {
+    fn try_into_operation(mut self) -> Result<Option<Operation>, sqlx::Error> {
+        let Some(operation_type) = self.operation_type.take() else {
+            return Ok(None);
+        };
+
+        match operation_type.as_str() {
+            "transaction" => decode_transaction_operation(self)
+                .map(Operation::Transaction)
+                .map(Some),
+            "transfer" => decode_transfer_operation(self)
+                .map(Operation::Transfer)
+                .map(Some),
+            _ => Err(decode_error(OperationDecodeError)),
+        }
+    }
+}
+
+fn decode_transaction_operation(row: OperationRow) -> Result<TransactionOperation, sqlx::Error> {
+    let id = row
+        .operation_id
+        .ok_or_else(|| decode_error(OperationDecodeError))?
+        .to_string()
+        .parse::<TransactionId>()
+        .map_err(decode_error)?;
+    let nature = TransactionNature::try_from(required(row.transaction_nature)?.as_str())
+        .map_err(decode_error)?;
+    let account_kind = AccountKind::try_from(required(row.transaction_account_kind)?.as_str())
+        .map_err(decode_error)?;
+    let account_amount =
+        TransactionAmount::new(required(row.transaction_amount)?).map_err(decode_error)?;
+    let category = match row.category_id {
+        Some(id) => Some(CategorySummary {
+            id,
+            name: required(row.category_name)?,
+            kind: CategoryKind::try_from(required(row.category_kind)?.as_str())
+                .map_err(decode_error)?,
+            archived: row.category_archived,
+        }),
+        None => None,
+    };
+
+    Ok(TransactionOperation {
+        id,
+        household_id: required(row.household_id)?,
+        booking_date: required(row.booking_date)?,
+        label: TransactionLabel::new(required(row.transaction_label)?).map_err(decode_error)?,
+        nature,
+        amounts: TransactionAmounts::from_stored(nature, account_amount, account_kind)
+            .map_err(decode_error)?,
+        account: AccountSummary {
+            id: required(row.transaction_account_id)?,
+            name: required(row.transaction_account_name)?,
+            kind: account_kind,
+            archived: row.transaction_account_archived,
+        },
+        category,
+        origin: TransactionSource::try_from(required(row.transaction_origin)?.as_str())
+            .map_err(decode_error)?,
+        note: row
+            .transaction_note
+            .map(TransactionNote::new)
+            .transpose()
+            .map_err(decode_error)?,
+        created_at: required(row.created_at)?,
+        updated_at: required(row.updated_at)?,
+    })
+}
+
+fn decode_transfer_operation(row: OperationRow) -> Result<TransferOperation, sqlx::Error> {
+    let id = row
+        .operation_id
+        .ok_or_else(|| decode_error(OperationDecodeError))?
+        .to_string()
+        .parse::<TransferId>()
+        .map_err(decode_error)?;
+    let source_amount =
+        TransactionAmount::new(required(row.source_account_amount)?).map_err(decode_error)?;
+    let destination_amount =
+        TransactionAmount::new(required(row.destination_account_amount)?).map_err(decode_error)?;
+    let source = TransferMovementOperation {
+        transaction_id: required(row.source_transaction_id)?,
+        booking_date: required(row.source_booking_date)?,
+        label: TransactionLabel::new(required(row.source_label)?).map_err(decode_error)?,
+        account_amount: source_amount,
+        account: AccountSummary {
+            id: required(row.source_account_id)?,
+            name: required(row.source_account_name)?,
+            kind: AccountKind::try_from(required(row.source_account_kind)?.as_str())
+                .map_err(decode_error)?,
+            archived: row.source_account_archived,
+        },
+        note: row
+            .source_note
+            .map(TransactionNote::new)
+            .transpose()
+            .map_err(decode_error)?,
+    };
+    let destination = TransferMovementOperation {
+        transaction_id: required(row.destination_transaction_id)?,
+        booking_date: required(row.destination_booking_date)?,
+        label: TransactionLabel::new(required(row.destination_label)?).map_err(decode_error)?,
+        account_amount: destination_amount,
+        account: AccountSummary {
+            id: required(row.destination_account_id)?,
+            name: required(row.destination_account_name)?,
+            kind: AccountKind::try_from(required(row.destination_account_kind)?.as_str())
+                .map_err(decode_error)?,
+            archived: row.destination_account_archived,
+        },
+        note: row
+            .destination_note
+            .map(TransactionNote::new)
+            .transpose()
+            .map_err(decode_error)?,
+    };
+
+    Ok(TransferOperation {
+        id,
+        household_id: required(row.household_id)?,
+        booking_date: required(row.booking_date)?,
+        amount: TransactionNominalAmount::new(source_amount.value().abs()).map_err(decode_error)?,
+        source,
+        destination,
+        created_at: required(row.created_at)?,
+        updated_at: required(row.updated_at)?,
+    })
+}
+
+fn required<T>(value: Option<T>) -> Result<T, sqlx::Error> {
+    value.ok_or_else(|| decode_error(OperationDecodeError))
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("operation data stored in database are inconsistent")]
+struct OperationDecodeError;
 
 impl TryFrom<TransactionRow> for Transaction {
     type Error = sqlx::Error;

@@ -2,16 +2,13 @@
 
 Toutes les routes métier sont préfixées par `/v1` et utilisent JSON. Les UUID sont générés par l'application et les montants décimaux sont transmis sous forme de chaînes afin de préserver leur précision.
 
-Les [contrats du nouveau client Web](client-contracts.md) décrivent séparément les représentations cibles validées mais pas encore entièrement implémentées.
-Le présent document reste la référence du comportement actuellement disponible.
+Les [contrats du nouveau client Web](client-contracts.md) détaillent les représentations stabilisées utilisées par le client. Le présent document reste la référence synthétique du comportement actuellement disponible.
 
 ## Pagination
 
 Les collections paginées acceptent `page` et `limit`. `page` commence à 1 et vaut 1 par défaut. `limit` vaut 50 par défaut et accepte une valeur comprise entre 1 et 200. L'offset PostgreSQL est calculé en interne et n'appartient pas au contrat HTTP.
 
-Dans le contrat actuellement implémenté, le nombre total d'éléments n'est pas retourné systématiquement.
-
-Les réponses actuelles sont encore des tableaux JSON. La cible validée pour le nouveau client utilise une enveloppe `items`, `page`, `limit` et `total`. Le client déduira l'existence d'une page suivante ; aucun membre `hasMore` ne sera retourné. Ce changement est détaillé dans les [contrats du client](client-contracts.md#pagination).
+Les collections des transactions et des transferts retournent une enveloppe `items`, `page`, `limit` et `total`. `total` compte exactement les éléments correspondant aux filtres avant pagination. Le client déduit l'existence d'une page suivante ; aucun membre `hasMore` n'est retourné. Les autres collections conservent la représentation indiquée dans leur section. Ce contrat est détaillé dans les [contrats du client](client-contracts.md#pagination).
 
 ## Erreurs
 
@@ -154,20 +151,16 @@ Les sources acceptées sont `manual`, `import`, `synchronization` et `reconcilia
 ## Transactions
 
 - `POST /v1/households/{household_id}/transactions` crée un revenu ou une dépense manuelle ;
-- `GET /v1/households/{household_id}/transactions` liste les mouvements du foyer ;
-- `GET /v1/households/{household_id}/transactions/{transaction_id}` consulte un mouvement ;
+- `GET /v1/households/{household_id}/transactions` liste les opérations financières consolidées du foyer ;
+- `GET /v1/households/{household_id}/transactions/{transaction_id}` consulte une transaction ordinaire ;
 - `PATCH /v1/households/{household_id}/transactions/{transaction_id}` modifie un mouvement ordinaire ;
 - `DELETE /v1/households/{household_id}/transactions/{transaction_id}` le supprime logiquement.
 
-La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`, `uncategorized`, `source`, `search`, `page` et `limit`. `uncategorized=true` sélectionne les revenus et dépenses sans catégorie, exclut les transferts et ne peut pas être combiné avec `categoryId`. Les mouvements d'un transfert apparaissent dans cette liste, mais ne peuvent pas être modifiés ou supprimés isolément.
+La liste accepte `accountId`, `dateFrom`, `dateTo`, `nature`, `categoryId`, `uncategorized`, `source`, `search`, `page` et `limit`. Elle retourne une collection consolidée discriminée par `operationType`, où chaque transfert apparaît une seule fois avec ses deux mouvements. `accountId` recherche l'un ou l'autre compte d'un transfert ; sa date source sert de date canonique. `uncategorized=true` sélectionne les revenus et dépenses sans catégorie, exclut les transferts et ne peut pas être combiné avec `categoryId`.
 
-Le champ `amount` actuellement exposé représente le montant signé stocké sur le compte. Cette représentation reste le contrat effectif jusqu'à l'implémentation du contrat cible du nouveau client Web.
+Une transaction ordinaire incorpore les résumés de son compte et de sa catégorie, y compris lorsqu'ils sont archivés. `amount` est son montant nominal strictement positif, `effect` vaut `standard` ou `reversal`, `economicAmount` représente son effet signé sur le patrimoine et `accountAmount` son effet signé sur le compte. La création exige `amount` et `effect` ; leur modification est indépendante. La précision maximale est de quatre décimales.
 
-### Cible du nouveau client Web
-
-La conception de la liste, du détail et des formulaires a stabilisé une collection consolidée où un transfert apparaît une seule fois, une pagination avec `total`, des résumés compacts incorporés et une représentation distincte du montant nominal, de l'effet économique et du montant du compte.
-
-Ces évolutions ne sont pas encore implémentées. Leur contrat complet, notamment la saisie `standard` ou `reversal`, les références archivées et la précision maximale de quatre décimales, est défini dans les [contrats du client](client-contracts.md#collection-consolidée-des-opérations).
+Les représentations complètes et les règles de signe sont définies dans les [contrats du client](client-contracts.md#collection-consolidée-des-opérations).
 Le MVP retient un pictogramme neutre côté Web plutôt qu'une métadonnée d'icône dans l'API.
 
 ## Transferts
@@ -179,6 +172,8 @@ Le MVP retient un pictogramme neutre côté Web plutôt qu'une métadonnée d'ic
 - `DELETE /v1/households/{household_id}/transfers/{transfer_id}` supprime logiquement l'ensemble.
 
 Le montant nominal est strictement positif. Les montants signés des deux mouvements sont calculés selon leurs rôles et selon que chaque compte représente un actif ou une dette. Les dates, libellés et notes peuvent différer entre les deux mouvements.
+
+La liste dédiée retourne l'enveloppe paginée `items`, `page`, `limit` et `total`. La collection consolidée des transactions fournit la représentation destinée à l'affichage chronologique avec un seul élément par transfert.
 
 ## Patrimoine
 
@@ -192,6 +187,6 @@ Le résumé utilise `calculatedBalance` pour chaque compte actif. Le montant bru
 
 Le rapport expose les bornes du mois, la devise du foyer, les revenus, les dépenses et le flux net. Les revenus et dépenses contiennent chacun un total, un nombre de transactions et une ventilation par catégorie. Une catégorie nulle représente le groupe virtuel « Non catégorisé ».
 
-L'effet économique inverse le montant brut des transactions portées par un compte de dette. Les remboursements et corrections conservent leur signe et peuvent donc réduire le total d'une section ou d'une catégorie. Les transferts et les transactions supprimées sont exclus. Les comptes et catégories archivés restent inclus dans l'historique.
+Le rapport utilise l'effet économique dérivé de la nature et de `effect`, indépendamment de la famille actif ou dette du compte. Les opérations `reversal` peuvent donc réduire le total d'une section ou d'une catégorie. Les transferts et les transactions supprimées sont exclus. Les comptes et catégories archivés restent inclus dans l'historique.
 
 Les transactions sources d'un total sont consultées avec la collection des transactions et les mêmes bornes, nature et catégorie. Le filtre `uncategorized=true` permet de retrouver les sources du groupe sans catégorie.

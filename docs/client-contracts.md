@@ -1,11 +1,9 @@
 # Contrats API du nouveau client Web
 
-- Statut : cible validée, implémentation partielle
-- Date : 2026-08-23
+- Statut : disponible
+- Date : 2026-08-31
 
-Ce document stabilise les contrats nécessaires aux premiers parcours du nouveau client Web. Il complète la [vue d'ensemble de l'API](api.md) et détaille les évolutions qui seront implémentées avant que le client dépende de ces réponses.
-
-Tant qu'un contrat décrit ici n'est pas annoncé comme disponible dans le [catalogue des fonctionnalités](features.md), le comportement documenté dans `api.md` reste le comportement réel de l'API.
+Ce document décrit les contrats stabilisés et disponibles pour les premiers parcours du nouveau client Web. Il complète la [vue d'ensemble de l'API](api.md), qui reste la référence synthétique du comportement réel.
 
 ## Principes communs
 
@@ -65,7 +63,7 @@ Le contrat ne demande aucune requête supplémentaire par transaction.
 
 ## Collection consolidée des opérations
 
-`GET /v1/households/{household_id}/transactions` devient la collection chronologique des opérations financières du foyer. Chaque élément possède un discriminateur `operationType` égal à `transaction` ou `transfer`.
+`GET /v1/households/{household_id}/transactions` est la collection chronologique des opérations financières du foyer. Chaque élément possède un discriminateur `operationType` égal à `transaction` ou `transfer`.
 
 ### Transaction ordinaire
 
@@ -293,11 +291,9 @@ Le client garantit un pictogramme neutre pour toute catégorie. Cette décision 
 
 ## État de l'implémentation
 
-Les lots suivants appliqueront ce contrat dans cet ordre :
+Tous les lots du contrat sont disponibles :
 
 1. catalogue global d'établissements : disponible ;
 2. validations de date et correction des soldes : disponibles ;
 3. comptes archivés, restauration et sous-totaux : disponibles ;
-4. collection consolidée, montants, résumés incorporés et pagination : planifiée.
-
-Chaque lot mettra à jour `api.md`, le catalogue des fonctionnalités et les tests au moment où son comportement deviendra réellement disponible.
+4. collection consolidée, montants, résumés incorporés et pagination : disponible.

@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    domain::{Transfer, TransferMovement},
+    domain::{Transfer, TransferMovement, TransferPage},
     service::{
         CreateTransferCommand, TransferMovementCommand, UpdateTransferCommand,
         UpdateTransferMovementCommand,
@@ -138,6 +138,26 @@ impl From<Transfer> for TransferResponse {
             destination: transfer.destination.into(),
             created_at: transfer.created_at,
             updated_at: transfer.updated_at,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransferPageResponse {
+    items: Vec<TransferResponse>,
+    page: i64,
+    limit: i64,
+    total: i64,
+}
+
+impl From<TransferPage> for TransferPageResponse {
+    fn from(page: TransferPage) -> Self {
+        Self {
+            items: page.items.into_iter().map(Into::into).collect(),
+            page: page.page,
+            limit: page.limit,
+            total: page.total,
         }
     }
 }

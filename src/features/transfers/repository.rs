@@ -128,7 +128,20 @@ impl TransferRepository {
         &self,
         household_id: HouseholdId,
         pagination: Pagination,
-    ) -> Result<Vec<Transfer>, sqlx::Error> {
+    ) -> Result<(Vec<Transfer>, i64), sqlx::Error> {
+        let total = sqlx::query_scalar::<_, i64>(
+            "SELECT count(*) FROM transfers t \
+             WHERE t.household_id = $1 AND t.deleted_at IS NULL \
+               AND EXISTS (SELECT 1 FROM transactions source \
+                 WHERE source.transfer_id = t.id AND source.transfer_role = 'source' \
+                   AND source.deleted_at IS NULL) \
+               AND EXISTS (SELECT 1 FROM transactions destination \
+                 WHERE destination.transfer_id = t.id AND destination.transfer_role = 'destination' \
+                   AND destination.deleted_at IS NULL)",
+        )
+        .bind(household_id)
+        .fetch_one(self.database.pool())
+        .await?;
         let rows = sqlx::query_as::<_, TransferRow>(
             "SELECT t.id, t.household_id, t.created_at, t.updated_at, t.deleted_at, \
              source.id AS source_transaction_id, source.account_id AS source_account_id, \
@@ -154,7 +167,12 @@ impl TransferRepository {
         .fetch_all(self.database.pool())
         .await?;
 
-        rows.into_iter().map(Transfer::try_from).collect()
+        let transfers = rows
+            .into_iter()
+            .map(Transfer::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok((transfers, total))
     }
 
     pub async fn update(&self, update: TransferUpdate) -> Result<Option<Transfer>, sqlx::Error> {

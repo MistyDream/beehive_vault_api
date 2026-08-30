@@ -1,6 +1,7 @@
 pub mod domain;
 mod dto;
 mod handlers;
+mod operations;
 mod repository;
 mod service;
 

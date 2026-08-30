@@ -63,7 +63,7 @@ async fn calculated_balances_follow_reconciliation_rules() {
         &checking_id,
         "2026-08-10",
         "Same-day transaction",
-        "-100.00",
+        "100.00",
         "expense",
     )
     .await;
@@ -73,7 +73,7 @@ async fn calculated_balances_follow_reconciliation_rules() {
         &checking_id,
         "2026-08-11",
         "Later transaction",
-        "-50.00",
+        "50.00",
         "expense",
     )
     .await;
@@ -128,7 +128,7 @@ async fn calculated_balances_follow_reconciliation_rules() {
         &checking_id,
         "2026-08-12",
         "Post-reconciliation transaction",
-        "-25.00",
+        "25.00",
         "expense",
     )
     .await;
@@ -232,6 +232,7 @@ async fn create_transaction(
             "bookingDate": booking_date,
             "label": label,
             "amount": amount,
+            "effect": "standard",
             "nature": nature
         }),
         StatusCode::CREATED,

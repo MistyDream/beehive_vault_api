@@ -16,7 +16,9 @@ use crate::{
 };
 
 use super::{
-    domain::{NewTransfer, NewTransferMovement, Transfer, TransferAmount, TransferUpdate},
+    domain::{
+        NewTransfer, NewTransferMovement, Transfer, TransferAmount, TransferPage, TransferUpdate,
+    },
     repository::TransferRepository,
 };
 
@@ -202,7 +204,7 @@ impl TransferService {
         &self,
         household_id: HouseholdId,
         pagination: Pagination,
-    ) -> Result<Vec<Transfer>, ApiError> {
+    ) -> Result<TransferPage, ApiError> {
         if self
             .household_repository
             .find(household_id)
@@ -212,10 +214,17 @@ impl TransferService {
             return Err(ApiError::new(ProblemKind::HouseholdNotFound));
         }
 
-        Ok(self
+        let (items, total) = self
             .transfer_repository
             .list(household_id, pagination)
-            .await?)
+            .await?;
+
+        Ok(TransferPage {
+            items,
+            page: pagination.page(),
+            limit: pagination.limit(),
+            total,
+        })
     }
 
     pub async fn update(

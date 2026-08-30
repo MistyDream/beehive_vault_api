@@ -42,6 +42,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         "Salary",
         "3000.00",
         "income",
+        "standard",
         Some(&salary_category_id),
     )
     .await;
@@ -51,8 +52,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &credit_card_id,
         "2026-08-02",
         "Card reward",
-        "-100.00",
+        "100.00",
         "income",
+        "standard",
         None,
     )
     .await;
@@ -62,8 +64,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &checking_id,
         "2026-08-03",
         "Groceries",
-        "-200.00",
+        "200.00",
         "expense",
+        "standard",
         Some(&food_category_id),
     )
     .await;
@@ -75,6 +78,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         "Card groceries",
         "80.00",
         "expense",
+        "standard",
         Some(&food_category_id),
     )
     .await;
@@ -86,6 +90,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         "Grocery refund",
         "20.00",
         "expense",
+        "reversal",
         Some(&food_category_id),
     )
     .await;
@@ -95,8 +100,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &checking_id,
         "2026-08-06",
         "Cash purchase",
-        "-40.00",
+        "40.00",
         "expense",
+        "standard",
         None,
     )
     .await;
@@ -108,6 +114,7 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         "Uncategorized card purchase",
         "10.00",
         "expense",
+        "standard",
         None,
     )
     .await;
@@ -117,8 +124,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &checking_id,
         "2026-07-31",
         "Previous month",
-        "-500.00",
+        "500.00",
         "expense",
+        "standard",
         None,
     )
     .await;
@@ -128,8 +136,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &checking_id,
         "2026-08-08",
         "Deleted purchase",
-        "-999.00",
+        "999.00",
         "expense",
+        "standard",
         None,
     )
     .await;
@@ -206,8 +215,9 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         &other_account_id,
         "2026-08-10",
         "Other household expense",
-        "-1000.00",
+        "1000.00",
         "expense",
+        "standard",
         None,
     )
     .await;
@@ -251,7 +261,8 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(uncategorized.as_array().unwrap().len(), 2);
+    assert_eq!(uncategorized["items"].as_array().unwrap().len(), 2);
+    assert_eq!(uncategorized["total"], 2);
 
     let all_uncategorized = send_json(
         &application,
@@ -263,7 +274,8 @@ async fn monthly_flows_are_aggregated_and_traceable() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(all_uncategorized.as_array().unwrap().len(), 3);
+    assert_eq!(all_uncategorized["items"].as_array().unwrap().len(), 3);
+    assert_eq!(all_uncategorized["total"], 3);
 
     send_json(
         &application,
@@ -392,6 +404,7 @@ async fn create_transaction(
     label: &str,
     amount: &str,
     nature: &str,
+    effect: &str,
     category_id: Option<&str>,
 ) -> String {
     let transaction = send_json(
@@ -404,6 +417,7 @@ async fn create_transaction(
             "label": label,
             "amount": amount,
             "nature": nature,
+            "effect": effect,
             "categoryId": category_id
         }),
         StatusCode::CREATED,

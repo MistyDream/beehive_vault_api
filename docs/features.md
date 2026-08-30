@@ -25,8 +25,9 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Patrimoine | Total des actifs, dettes et patrimoine net | Calculé depuis les soldes courants des comptes actifs |
 | Catégories | Catalogue initial propre à chaque foyer | Pas de sous-catégories |
 | Catégories | Création, filtrage, renommage et archivage | Une catégorie possède une nature immuable |
-| Transactions | Création manuelle d'un revenu ou d'une dépense | Pas encore de création par import CSV |
-| Transactions | Consultation, filtres et pagination | Page 1 et limite 50 par défaut, limite maximale de 200 |
+| Transactions | Création manuelle d'un revenu ou d'une dépense | Montant nominal positif et effet `standard` ou `reversal` |
+| Transactions | Collection consolidée, filtres et pagination exacte | Un transfert compte comme une seule opération ; page 1 et limite 50 par défaut |
+| Transactions | Résumés incorporés et montants dérivés | Compte et catégorie archivés conservés dans l'historique |
 | Transactions | Modification et suppression logique | Les mouvements de transfert sont protégés des modifications isolées |
 | Transferts | Création et consultation des deux mouvements liés | Les montants signés sont calculés selon les types de comptes |
 | Transferts | Modification et suppression atomiques | Les deux mouvements sont toujours traités ensemble |
@@ -35,13 +36,12 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. Le prochain prérequis du client Web est la consolidation des contrats des transactions.
+Aucune fonctionnalité produit n'est actuellement en développement. Le prochain lot de l'API est la prévisualisation CSV.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| Prérequis client | Contrats des transactions | Fournir pagination progressive, effet économique, précision monétaire et résumés de transfert sans calcul métier dans le navigateur |
 | 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |

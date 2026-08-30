@@ -82,7 +82,8 @@ async fn household_transactions_can_be_managed() {
             "accountId": account_id,
             "bookingDate": "2026-08-10",
             "label": "Grocery store",
-            "amount": "-42.50",
+            "amount": "42.50",
+            "effect": "standard",
             "nature": "expense",
             "categoryId": category_id,
             "note": "Weekly groceries"
@@ -91,12 +92,15 @@ async fn household_transactions_can_be_managed() {
     )
     .await;
     let transaction_id = created["id"].as_str().unwrap();
-    assert_eq!(created["amount"], "-42.5000");
+    assert_eq!(created["operationType"], "transaction");
+    assert_eq!(created["amount"], "42.5000");
+    assert_eq!(created["effect"], "standard");
+    assert_eq!(created["economicAmount"], "-42.5000");
+    assert_eq!(created["accountAmount"], "-42.5000");
     assert_eq!(created["nature"], "expense");
-    assert_eq!(created["categoryId"], category_id);
-    assert_eq!(created["transferId"], Value::Null);
-    assert_eq!(created["transferRole"], Value::Null);
-    assert_eq!(created["source"], "manual");
+    assert_eq!(created["category"]["id"], category_id);
+    assert_eq!(created["account"]["id"], account_id);
+    assert_eq!(created["origin"], "manual");
 
     let fetched = send_json(
         &application,
@@ -118,7 +122,24 @@ async fn household_transactions_can_be_managed() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(transactions.as_array().unwrap().len(), 1);
+    assert_eq!(transactions["items"].as_array().unwrap().len(), 1);
+    assert_eq!(transactions["page"], 1);
+    assert_eq!(transactions["limit"], 1);
+    assert_eq!(transactions["total"], 1);
+
+    let empty_page = send_json(
+        &application,
+        "GET",
+        &format!(
+            "/v1/households/{household_id}/transactions?accountId={account_id}&nature=expense&page=2&limit=1"
+        ),
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert!(empty_page["items"].as_array().unwrap().is_empty());
+    assert_eq!(empty_page["page"], 2);
+    assert_eq!(empty_page["total"], 1);
 
     send_json(
         &application,
@@ -137,13 +158,30 @@ async fn household_transactions_can_be_managed() {
     )
     .await;
     assert_eq!(
-        transaction_with_archived_category["categoryId"],
+        transaction_with_archived_category["category"]["id"],
         category_id
     );
     assert_eq!(
         transaction_with_archived_category["note"],
         "Receipt checked"
     );
+    assert_eq!(
+        transaction_with_archived_category["category"]["archived"],
+        true
+    );
+
+    let reversed = send_json(
+        &application,
+        "PATCH",
+        &format!("/v1/households/{household_id}/transactions/{transaction_id}"),
+        json!({ "effect": "reversal" }),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(reversed["amount"], "42.5000");
+    assert_eq!(reversed["effect"], "reversal");
+    assert_eq!(reversed["economicAmount"], "42.5000");
+    assert_eq!(reversed["accountAmount"], "42.5000");
 
     let updated = send_json(
         &application,
@@ -158,8 +196,27 @@ async fn household_transactions_can_be_managed() {
     )
     .await;
     assert_eq!(updated["label"], "Supermarket");
-    assert_eq!(updated["categoryId"], Value::Null);
+    assert_eq!(updated["category"], Value::Null);
     assert_eq!(updated["note"], Value::Null);
+    assert_eq!(updated["effect"], "reversal");
+
+    for invalid_amount in ["0", "-1", "1.00001"] {
+        send_json(
+            &application,
+            "POST",
+            &format!("/v1/households/{household_id}/transactions"),
+            json!({
+                "accountId": account_id,
+                "bookingDate": "2026-08-10",
+                "label": "Invalid amount",
+                "amount": invalid_amount,
+                "effect": "standard",
+                "nature": "expense"
+            }),
+            StatusCode::UNPROCESSABLE_ENTITY,
+        )
+        .await;
+    }
 
     send_json(
         &application,
@@ -170,6 +227,7 @@ async fn household_transactions_can_be_managed() {
             "bookingDate": "9999-12-31",
             "label": "Future transaction",
             "amount": "10.00",
+            "effect": "standard",
             "nature": "income"
         }),
         StatusCode::UNPROCESSABLE_ENTITY,

@@ -2,7 +2,10 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId};
+use crate::{
+    features::accounts::AccountKind,
+    types::{AccountId, CategoryId, HouseholdId, TransactionId, TransferId},
+};
 
 /// A non-zero signed amount representing a transaction's raw effect on an account balance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -25,6 +28,113 @@ impl TransactionAmount {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("transaction amount must not be zero")]
 pub struct TransactionAmountError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionEffect {
+    Standard,
+    Reversal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransactionNominalAmount(Decimal);
+
+impl TransactionNominalAmount {
+    pub fn new(value: Decimal) -> Result<Self, TransactionNominalAmountError> {
+        const MAXIMUM_EXCLUSIVE: i64 = 10_000_000_000_000_000;
+
+        if value <= Decimal::ZERO || value.scale() > 4 || value >= Decimal::from(MAXIMUM_EXCLUSIVE)
+        {
+            return Err(TransactionNominalAmountError);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn value(self) -> Decimal {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("transaction amount must be positive with at most 16 integer and 4 fractional digits")]
+pub struct TransactionNominalAmountError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransactionAmounts {
+    pub nominal: TransactionNominalAmount,
+    pub effect: TransactionEffect,
+    pub economic: Decimal,
+    pub account: TransactionAmount,
+}
+
+impl TransactionAmounts {
+    pub fn from_input(
+        nature: TransactionNature,
+        effect: TransactionEffect,
+        nominal: TransactionNominalAmount,
+        account_kind: AccountKind,
+    ) -> Result<Self, TransactionAmountsError> {
+        let nominal_value = nominal.value();
+        let economic = match (nature, effect) {
+            (TransactionNature::Income, TransactionEffect::Standard)
+            | (TransactionNature::Expense, TransactionEffect::Reversal) => nominal_value,
+            (TransactionNature::Income, TransactionEffect::Reversal)
+            | (TransactionNature::Expense, TransactionEffect::Standard) => -nominal_value,
+            (TransactionNature::Transfer, _) => return Err(TransactionAmountsError),
+        };
+        let account_value = if account_kind.is_liability() {
+            -economic
+        } else {
+            economic
+        };
+
+        Ok(Self {
+            nominal,
+            effect,
+            economic,
+            account: TransactionAmount::new(account_value)
+                .expect("a positive nominal amount always produces a non-zero account amount"),
+        })
+    }
+
+    pub fn from_stored(
+        nature: TransactionNature,
+        account_amount: TransactionAmount,
+        account_kind: AccountKind,
+    ) -> Result<Self, TransactionAmountsError> {
+        if nature == TransactionNature::Transfer {
+            return Err(TransactionAmountsError);
+        }
+        let account_value = account_amount.value();
+        let economic = if account_kind.is_liability() {
+            -account_value
+        } else {
+            account_value
+        };
+        let effect = match (nature, economic.is_sign_positive()) {
+            (TransactionNature::Income, true) | (TransactionNature::Expense, false) => {
+                TransactionEffect::Standard
+            }
+            (TransactionNature::Income, false) | (TransactionNature::Expense, true) => {
+                TransactionEffect::Reversal
+            }
+            (TransactionNature::Transfer, _) => return Err(TransactionAmountsError),
+        };
+        let nominal =
+            TransactionNominalAmount::new(economic.abs()).map_err(|_| TransactionAmountsError)?;
+
+        Ok(Self {
+            nominal,
+            effect,
+            economic,
+            account: account_amount,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("transaction amounts require an income or expense nature")]
+pub struct TransactionAmountsError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionLabel(String);
@@ -297,6 +407,54 @@ mod tests {
     #[test]
     fn transaction_amount_rejects_zero() {
         assert!(TransactionAmount::new(Decimal::ZERO).is_err());
+    }
+
+    #[test]
+    fn nominal_amount_requires_positive_database_precision() {
+        assert!(TransactionNominalAmount::new(Decimal::new(4250, 2)).is_ok());
+        assert!(TransactionNominalAmount::new(Decimal::ZERO).is_err());
+        assert!(TransactionNominalAmount::new(Decimal::new(-1, 0)).is_err());
+        assert!(TransactionNominalAmount::new(Decimal::new(1, 5)).is_err());
+        assert!(TransactionNominalAmount::new(Decimal::from(10_000_000_000_000_000_i64)).is_err());
+    }
+
+    #[test]
+    fn transaction_amounts_derive_asset_and_liability_signs() {
+        let nominal = TransactionNominalAmount::new(Decimal::new(4250, 2)).unwrap();
+        let asset = TransactionAmounts::from_input(
+            TransactionNature::Expense,
+            TransactionEffect::Standard,
+            nominal,
+            AccountKind::Checking,
+        )
+        .unwrap();
+        let liability = TransactionAmounts::from_input(
+            TransactionNature::Expense,
+            TransactionEffect::Standard,
+            nominal,
+            AccountKind::CreditCard,
+        )
+        .unwrap();
+
+        assert_eq!(asset.economic, Decimal::new(-4250, 2));
+        assert_eq!(asset.account.value(), Decimal::new(-4250, 2));
+        assert_eq!(liability.economic, Decimal::new(-4250, 2));
+        assert_eq!(liability.account.value(), Decimal::new(4250, 2));
+    }
+
+    #[test]
+    fn stored_reversal_round_trips_to_nominal_semantics() {
+        let stored = TransactionAmount::new(Decimal::new(2500, 2)).unwrap();
+        let amounts = TransactionAmounts::from_stored(
+            TransactionNature::Expense,
+            stored,
+            AccountKind::Checking,
+        )
+        .unwrap();
+
+        assert_eq!(amounts.nominal.value(), Decimal::new(2500, 2));
+        assert_eq!(amounts.effect, TransactionEffect::Reversal);
+        assert_eq!(amounts.economic, Decimal::new(2500, 2));
     }
 
     #[test]

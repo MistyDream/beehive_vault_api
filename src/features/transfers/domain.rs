@@ -65,6 +65,13 @@ pub struct Transfer {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
+pub struct TransferPage {
+    pub items: Vec<Transfer>,
+    pub page: i64,
+    pub limit: i64,
+    pub total: i64,
+}
+
 impl Transfer {
     pub fn amount(&self) -> TransferAmount {
         TransferAmount(self.source.amount.value().abs())

@@ -9,7 +9,7 @@ use crate::{
 
 use super::{
     TransfersModule,
-    dto::{CreateTransferRequest, TransferResponse, UpdateTransferRequest},
+    dto::{CreateTransferRequest, TransferPageResponse, TransferResponse, UpdateTransferRequest},
 };
 
 pub(super) async fn create(
@@ -26,13 +26,13 @@ pub(super) async fn list(
     State(module): State<TransfersModule>,
     ApiPath(household_id): ApiPath<HouseholdId>,
     ApiQuery(query): ApiQuery<PaginationQuery>,
-) -> Result<Json<Vec<TransferResponse>>, ApiError> {
-    let transfers = module
+) -> Result<Json<TransferPageResponse>, ApiError> {
+    let page = module
         .service
         .list(household_id, Pagination::try_from(query)?)
         .await?;
 
-    Ok(Json(transfers.into_iter().map(Into::into).collect()))
+    Ok(Json(page.into()))
 }
 
 pub(super) async fn get(

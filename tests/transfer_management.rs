@@ -127,7 +127,10 @@ async fn household_transfers_can_be_managed_atomically() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(transfers.as_array().unwrap().len(), 4);
+    assert_eq!(transfers["items"].as_array().unwrap().len(), 4);
+    assert_eq!(transfers["page"], 1);
+    assert_eq!(transfers["limit"], 50);
+    assert_eq!(transfers["total"], 4);
     let second_page = send_json(
         &application,
         "GET",
@@ -136,7 +139,10 @@ async fn household_transfers_can_be_managed_atomically() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(second_page.as_array().unwrap().len(), 2);
+    assert_eq!(second_page["items"].as_array().unwrap().len(), 2);
+    assert_eq!(second_page["page"], 2);
+    assert_eq!(second_page["limit"], 2);
+    assert_eq!(second_page["total"], 4);
     send_json(
         &application,
         "GET",
@@ -154,7 +160,39 @@ async fn household_transfers_can_be_managed_atomically() {
         StatusCode::OK,
     )
     .await;
-    assert_eq!(transfer_transactions.as_array().unwrap().len(), 8);
+    assert_eq!(transfer_transactions["items"].as_array().unwrap().len(), 4);
+    assert_eq!(transfer_transactions["total"], 4);
+    assert!(
+        transfer_transactions["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|operation| operation["operationType"] == "transfer")
+    );
+    let consolidated_asset_transfer = transfer_transactions["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|operation| operation["id"] == asset_to_asset["id"])
+        .expect("the transfer should be listed once as a consolidated operation");
+    assert_eq!(consolidated_asset_transfer["bookingDate"], "2026-08-17");
+    assert_eq!(consolidated_asset_transfer["amount"], "500.0000");
+    assert_eq!(
+        consolidated_asset_transfer["source"]["account"]["id"],
+        checking_id
+    );
+    assert_eq!(
+        consolidated_asset_transfer["destination"]["account"]["id"],
+        savings_id
+    );
+    assert_eq!(
+        consolidated_asset_transfer["source"]["accountAmount"],
+        "-500.0000"
+    );
+    assert_eq!(
+        consolidated_asset_transfer["destination"]["accountAmount"],
+        "500.0000"
+    );
 
     let transfer_id = asset_to_asset["id"].as_str().unwrap();
     let source_transaction_id = asset_to_asset["source"]["transactionId"].as_str().unwrap();

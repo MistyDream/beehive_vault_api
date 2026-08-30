@@ -138,7 +138,7 @@ async fn account_collections_archive_and_restore_follow_the_client_contract() {
         &empty_account_id,
         "2026-08-22",
         "Balancing expense",
-        "-10.00",
+        "10.00",
         "expense",
     )
     .await;
@@ -279,6 +279,7 @@ async fn create_transaction(
             "bookingDate": booking_date,
             "label": label,
             "amount": amount,
+            "effect": "standard",
             "nature": nature
         }),
         StatusCode::CREATED,

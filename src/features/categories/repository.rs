@@ -76,6 +76,23 @@ impl CategoryRepository {
         row.map(Category::try_from).transpose()
     }
 
+    pub async fn find_including_archived(
+        &self,
+        household_id: HouseholdId,
+        category_id: CategoryId,
+    ) -> Result<Option<Category>, sqlx::Error> {
+        let row = sqlx::query_as::<_, CategoryRow>(
+            "SELECT id, household_id, name, kind, archived_at, created_at, updated_at \
+             FROM categories WHERE household_id = $1 AND id = $2",
+        )
+        .bind(household_id)
+        .bind(category_id)
+        .fetch_optional(self.database.pool())
+        .await?;
+
+        row.map(Category::try_from).transpose()
+    }
+
     pub async fn update_name(
         &self,
         household_id: HouseholdId,

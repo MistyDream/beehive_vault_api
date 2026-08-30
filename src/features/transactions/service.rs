@@ -4,7 +4,8 @@ use rust_decimal::Decimal;
 use crate::{
     error::{ApiError, ProblemKind},
     features::{
-        accounts::AccountRepository, categories::CategoryRepository,
+        accounts::{Account, AccountRepository},
+        categories::CategoryRepository,
         households::HouseholdRepository,
     },
     pagination::Pagination,
@@ -12,10 +13,12 @@ use crate::{
     update::FieldUpdate,
 };
 
+use super::operations::{AccountSummary, CategorySummary, OperationPage, TransactionOperation};
 use super::{
     domain::{
-        NewTransaction, Transaction, TransactionAmount, TransactionDetails, TransactionLabel,
-        TransactionNature, TransactionNote, TransactionSource, TransactionUpdate,
+        NewTransaction, Transaction, TransactionAmounts, TransactionDetails, TransactionEffect,
+        TransactionLabel, TransactionNature, TransactionNominalAmount, TransactionNote,
+        TransactionSource, TransactionUpdate,
     },
     repository::{TransactionFilters, TransactionRepository},
 };
@@ -25,6 +28,7 @@ pub struct CreateTransactionCommand {
     pub booking_date: NaiveDate,
     pub label: String,
     pub amount: Decimal,
+    pub effect: TransactionEffect,
     pub nature: TransactionNature,
     pub category_id: Option<CategoryId>,
     pub note: Option<String>,
@@ -47,6 +51,7 @@ pub struct UpdateTransactionCommand {
     pub booking_date: Option<NaiveDate>,
     pub label: Option<String>,
     pub amount: Option<Decimal>,
+    pub effect: Option<TransactionEffect>,
     pub nature: Option<TransactionNature>,
     pub category_id: FieldUpdate<CategoryId>,
     pub note: FieldUpdate<String>,
@@ -58,6 +63,7 @@ impl UpdateTransactionCommand {
             && self.booking_date.is_none()
             && self.label.is_none()
             && self.amount.is_none()
+            && self.effect.is_none()
             && self.nature.is_none()
             && self.category_id == FieldUpdate::Unchanged
             && self.note == FieldUpdate::Unchanged
@@ -91,7 +97,7 @@ impl TransactionService {
         &self,
         household_id: HouseholdId,
         command: CreateTransactionCommand,
-    ) -> Result<Transaction, ApiError> {
+    ) -> Result<TransactionOperation, ApiError> {
         if command.nature == TransactionNature::Transfer {
             return Err(ApiError::body_validation(
                 "#/nature",
@@ -103,9 +109,6 @@ impl TransactionService {
         let label = TransactionLabel::new(command.label).map_err(|error| {
             ApiError::body_validation("#/label", "invalid_length", error.to_string())
         })?;
-        let amount = TransactionAmount::new(command.amount).map_err(|error| {
-            ApiError::body_validation("#/amount", "zero_amount", error.to_string())
-        })?;
         let note = command
             .note
             .map(TransactionNote::new)
@@ -116,7 +119,8 @@ impl TransactionService {
 
         self.validate_booking_date(household_id, command.booking_date)
             .await?;
-        self.validate_account(household_id, command.account_id)
+        let account = self
+            .validate_account(household_id, command.account_id)
             .await?;
 
         self.validate_category(household_id, command.category_id, command.nature)
@@ -130,8 +134,13 @@ impl TransactionService {
             },
             TransactionNature::Transfer => unreachable!("transfers are rejected above"),
         };
+        let nominal = transaction_nominal_amount(command.amount)?;
+        let amount =
+            TransactionAmounts::from_input(command.nature, command.effect, nominal, account.kind)
+                .expect("transfers are rejected before ordinary amount derivation")
+                .account;
 
-        Ok(self
+        let transaction = self
             .transaction_repository
             .create(NewTransaction {
                 id: TransactionId::new(),
@@ -144,25 +153,24 @@ impl TransactionService {
                 source: TransactionSource::Manual,
                 note,
             })
-            .await?)
+            .await?;
+        self.present_transaction(transaction).await
     }
 
     pub async fn get(
         &self,
         household_id: HouseholdId,
         transaction_id: TransactionId,
-    ) -> Result<Transaction, ApiError> {
-        self.transaction_repository
-            .find(household_id, transaction_id)
-            .await?
-            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))
+    ) -> Result<TransactionOperation, ApiError> {
+        let transaction = self.get_stored(household_id, transaction_id).await?;
+        self.present_transaction(transaction).await
     }
 
     pub async fn list(
         &self,
         household_id: HouseholdId,
         command: ListTransactionsCommand,
-    ) -> Result<Vec<Transaction>, ApiError> {
+    ) -> Result<OperationPage, ApiError> {
         if self
             .household_repository
             .find(household_id)
@@ -205,10 +213,16 @@ impl TransactionService {
             pagination: command.pagination,
         };
 
-        Ok(self
+        let (items, total) = self
             .transaction_repository
-            .list(household_id, &filters)
-            .await?)
+            .list_operations(household_id, &filters)
+            .await?;
+        Ok(OperationPage {
+            items,
+            page: command.pagination.page(),
+            limit: command.pagination.limit(),
+            total,
+        })
     }
 
     pub async fn update(
@@ -216,20 +230,21 @@ impl TransactionService {
         household_id: HouseholdId,
         transaction_id: TransactionId,
         command: UpdateTransactionCommand,
-    ) -> Result<Transaction, ApiError> {
-        let transaction = self.get(household_id, transaction_id).await?;
+    ) -> Result<TransactionOperation, ApiError> {
+        let transaction = self.get_stored(household_id, transaction_id).await?;
         if matches!(transaction.details, TransactionDetails::Transfer { .. }) {
             return Err(ApiError::new(ProblemKind::TransferMovementUpdateForbidden)
                 .with_detail("Transfer movements must be updated through the transfer endpoint."));
         }
         if command.is_empty() {
-            return Ok(transaction);
+            return self.present_transaction(transaction).await;
         }
         if transaction.source == TransactionSource::Import
             && (command.account_id.is_some()
                 || command.booking_date.is_some()
                 || command.label.is_some()
-                || command.amount.is_some())
+                || command.amount.is_some()
+                || command.effect.is_some())
         {
             return Err(
                 ApiError::new(ProblemKind::ImportedTransactionFieldsImmutable)
@@ -240,6 +255,12 @@ impl TransactionService {
         let account_was_updated = command.account_id.is_some();
         let category_was_updated = !matches!(&command.category_id, FieldUpdate::Unchanged);
         let current_nature = transaction.details.nature();
+        let current_account = self
+            .account_repository
+            .find_including_archived(household_id, transaction.account_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))?;
+        let current_account_kind = current_account.kind;
         let account_id = command.account_id.unwrap_or(transaction.account_id);
         let booking_date = command.booking_date.unwrap_or(transaction.booking_date);
         let label = command
@@ -250,14 +271,6 @@ impl TransactionService {
                 ApiError::body_validation("#/label", "invalid_length", error.to_string())
             })?
             .unwrap_or(transaction.label);
-        let amount = command
-            .amount
-            .map(TransactionAmount::new)
-            .transpose()
-            .map_err(|error| {
-                ApiError::body_validation("#/amount", "zero_amount", error.to_string())
-            })?
-            .unwrap_or(transaction.amount);
         let nature = command.nature.unwrap_or(current_nature);
         if nature == TransactionNature::Transfer {
             return Err(ApiError::body_validation(
@@ -281,9 +294,11 @@ impl TransactionService {
 
         self.validate_booking_date(household_id, booking_date)
             .await?;
-        if account_was_updated {
-            self.validate_account(household_id, account_id).await?;
-        }
+        let account = if account_was_updated {
+            self.validate_account(household_id, account_id).await?
+        } else {
+            current_account
+        };
         if category_was_updated || nature != current_nature {
             self.validate_category(household_id, category_id, nature)
                 .await?;
@@ -293,8 +308,24 @@ impl TransactionService {
             TransactionNature::Expense => TransactionDetails::Expense { category_id },
             TransactionNature::Transfer => unreachable!("transfers are rejected above"),
         };
+        let current_amounts = TransactionAmounts::from_stored(
+            current_nature,
+            transaction.amount,
+            current_account_kind,
+        )
+        .expect("a regular transaction always has ordinary amount semantics");
+        let nominal = command
+            .amount
+            .map(transaction_nominal_amount)
+            .transpose()?
+            .unwrap_or(current_amounts.nominal);
+        let effect = command.effect.unwrap_or(current_amounts.effect);
+        let amount = TransactionAmounts::from_input(nature, effect, nominal, account.kind)
+            .expect("transfers are rejected before ordinary amount derivation")
+            .account;
 
-        self.transaction_repository
+        let transaction = self
+            .transaction_repository
             .update_regular(TransactionUpdate {
                 id: transaction.id,
                 household_id,
@@ -306,7 +337,8 @@ impl TransactionService {
                 note,
             })
             .await?
-            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))
+            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))?;
+        self.present_transaction(transaction).await
     }
 
     pub async fn delete(
@@ -314,7 +346,7 @@ impl TransactionService {
         household_id: HouseholdId,
         transaction_id: TransactionId,
     ) -> Result<(), ApiError> {
-        let transaction = self.get(household_id, transaction_id).await?;
+        let transaction = self.get_stored(household_id, transaction_id).await?;
         if matches!(transaction.details, TransactionDetails::Transfer { .. }) {
             return Err(ApiError::new(ProblemKind::TransferMovementDeleteForbidden)
                 .with_detail("Transfer movements must be deleted through the transfer endpoint."));
@@ -329,6 +361,70 @@ impl TransactionService {
         }
 
         Ok(())
+    }
+
+    async fn get_stored(
+        &self,
+        household_id: HouseholdId,
+        transaction_id: TransactionId,
+    ) -> Result<Transaction, ApiError> {
+        self.transaction_repository
+            .find(household_id, transaction_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::TransactionNotFound))
+    }
+
+    async fn present_transaction(
+        &self,
+        transaction: Transaction,
+    ) -> Result<TransactionOperation, ApiError> {
+        let nature = transaction.details.nature();
+        if nature == TransactionNature::Transfer {
+            return Err(ApiError::new(ProblemKind::TransactionNotFound));
+        }
+        let account = self
+            .account_repository
+            .find_including_archived(transaction.household_id, transaction.account_id)
+            .await?
+            .ok_or_else(|| ApiError::new(ProblemKind::AccountNotFound))?;
+        let category = match transaction.details.category_id() {
+            Some(category_id) => {
+                let category = self
+                    .category_repository
+                    .find_including_archived(transaction.household_id, category_id)
+                    .await?
+                    .ok_or_else(|| ApiError::new(ProblemKind::CategoryNotFound))?;
+                Some(CategorySummary {
+                    id: category.id,
+                    name: category.name.into_string(),
+                    kind: category.kind,
+                    archived: category.archived_at.is_some(),
+                })
+            }
+            None => None,
+        };
+        let amounts = TransactionAmounts::from_stored(nature, transaction.amount, account.kind)
+            .expect("a regular transaction always has ordinary amount semantics");
+
+        Ok(TransactionOperation {
+            id: transaction.id,
+            household_id: transaction.household_id,
+            booking_date: transaction.booking_date,
+            label: transaction.label,
+            nature,
+            amounts,
+            account: AccountSummary {
+                id: account.id,
+                name: account.name,
+                kind: account.kind,
+                archived: account.archived_at.is_some(),
+            },
+            category,
+            origin: transaction.source,
+            note: transaction.note,
+            created_at: transaction.created_at,
+            updated_at: transaction.updated_at,
+        })
     }
 
     async fn validate_category(
@@ -391,22 +487,23 @@ impl TransactionService {
         &self,
         household_id: HouseholdId,
         account_id: AccountId,
-    ) -> Result<(), ApiError> {
-        if self
-            .account_repository
+    ) -> Result<Account, ApiError> {
+        self.account_repository
             .find(household_id, account_id)
             .await?
-            .is_none()
-        {
-            return Err(ApiError::body_validation(
-                "#/accountId",
-                "invalid_account",
-                "account must be active and belong to the household",
-            ));
-        }
-
-        Ok(())
+            .ok_or_else(|| {
+                ApiError::body_validation(
+                    "#/accountId",
+                    "invalid_account",
+                    "account must be active and belong to the household",
+                )
+            })
     }
+}
+
+fn transaction_nominal_amount(amount: Decimal) -> Result<TransactionNominalAmount, ApiError> {
+    TransactionNominalAmount::new(amount)
+        .map_err(|error| ApiError::body_validation("#/amount", "invalid_amount", error.to_string()))
 }
 
 #[cfg(test)]
@@ -419,6 +516,7 @@ mod tests {
             booking_date: None,
             label: None,
             amount: None,
+            effect: None,
             nature: None,
             category_id: FieldUpdate::Unchanged,
             note: FieldUpdate::Unchanged,

@@ -15,6 +15,7 @@ use crate::database::Database;
 use service::CategoryService;
 
 pub(crate) use catalog::INITIAL_CATEGORIES;
+pub(crate) use domain::CategoryKind;
 pub(crate) use repository::CategoryRepository;
 
 #[derive(Clone)]

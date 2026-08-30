@@ -9,8 +9,8 @@ use crate::{
 use super::{
     TransactionsModule,
     dto::{
-        CreateTransactionRequest, ListTransactionsQuery, TransactionResponse,
-        UpdateTransactionRequest,
+        CreateTransactionRequest, ListTransactionsQuery, OperationPageResponse,
+        TransactionOperationResponse, UpdateTransactionRequest,
     },
 };
 
@@ -18,7 +18,7 @@ pub(super) async fn create(
     State(module): State<TransactionsModule>,
     ApiPath(household_id): ApiPath<HouseholdId>,
     ApiJson(request): ApiJson<CreateTransactionRequest>,
-) -> Result<(StatusCode, Json<TransactionResponse>), ApiError> {
+) -> Result<(StatusCode, Json<TransactionOperationResponse>), ApiError> {
     let transaction = module.service.create(household_id, request.into()).await?;
 
     Ok((StatusCode::CREATED, Json(transaction.into())))
@@ -28,16 +28,20 @@ pub(super) async fn list(
     State(module): State<TransactionsModule>,
     ApiPath(household_id): ApiPath<HouseholdId>,
     ApiQuery(query): ApiQuery<ListTransactionsQuery>,
-) -> Result<Json<Vec<TransactionResponse>>, ApiError> {
-    let transactions = module.service.list(household_id, query.try_into()?).await?;
-
-    Ok(Json(transactions.into_iter().map(Into::into).collect()))
+) -> Result<Json<OperationPageResponse>, ApiError> {
+    Ok(Json(
+        module
+            .service
+            .list(household_id, query.try_into()?)
+            .await?
+            .into(),
+    ))
 }
 
 pub(super) async fn get(
     State(module): State<TransactionsModule>,
     ApiPath((household_id, transaction_id)): ApiPath<(HouseholdId, TransactionId)>,
-) -> Result<Json<TransactionResponse>, ApiError> {
+) -> Result<Json<TransactionOperationResponse>, ApiError> {
     let transaction = module.service.get(household_id, transaction_id).await?;
 
     Ok(Json(transaction.into()))
@@ -47,7 +51,7 @@ pub(super) async fn update(
     State(module): State<TransactionsModule>,
     ApiPath((household_id, transaction_id)): ApiPath<(HouseholdId, TransactionId)>,
     ApiJson(request): ApiJson<UpdateTransactionRequest>,
-) -> Result<Json<TransactionResponse>, ApiError> {
+) -> Result<Json<TransactionOperationResponse>, ApiError> {
     let transaction = module
         .service
         .update(household_id, transaction_id, request.into())
