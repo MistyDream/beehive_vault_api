@@ -5,7 +5,7 @@ mod reader;
 mod repository;
 mod service;
 
-use axum::{Router, routing::post};
+use axum::{Router, extract::DefaultBodyLimit, routing::post};
 
 use crate::{
     database::Database,
@@ -14,6 +14,10 @@ use crate::{
 
 use repository::CsvImportRepository;
 use service::CsvImportService;
+
+// Keep the preview's 2 MiB allowance for the encoded CSV and format. Another 512 KiB
+// leaves room for the file name and 5,000 selections of fewer than 60 bytes each in compact JSON.
+const MAX_CONFIRM_BODY_BYTES: usize = 2 * 1024 * 1024 + 512 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct CsvImportModule {
@@ -37,7 +41,7 @@ pub(crate) fn routes(module: CsvImportModule) -> Router {
         )
         .route(
             "/households/{household_id}/accounts/{account_id}/imports/csv/confirm",
-            post(handlers::confirm),
+            post(handlers::confirm).layer(DefaultBodyLimit::max(MAX_CONFIRM_BODY_BYTES)),
         )
         .with_state(module)
 }

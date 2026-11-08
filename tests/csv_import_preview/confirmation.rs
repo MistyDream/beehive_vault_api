@@ -365,6 +365,118 @@ async fn validates_all_selected_rows_and_rolls_back_a_failed_write() {
     assert_eq!(error["code"], "account_not_found");
 }
 
+#[tokio::test]
+#[ignore = "requires the local PostgreSQL test database"]
+async fn confirms_the_full_selection_after_previewing_a_maximum_size_csv() {
+    const CSV_BYTES: usize = 1024 * 1024;
+    const ROWS: usize = 5_000;
+    let header = "Booking;Description;Amount;Ignored\n";
+    let record = "12/08/2026;Groceries;-12,3456;";
+    // Tabs in an ignored column are valid CSV and require escaping in the JSON body.
+    let padding = CSV_BYTES - header.len() - ROWS * (record.len() + 1);
+    let tabs = "\t".repeat(padding / ROWS);
+    let final_tabs = "\t".repeat(padding % ROWS);
+    let mut csv = String::with_capacity(CSV_BYTES);
+    csv.push_str(header);
+    for index in 0..ROWS {
+        csv.push_str(record);
+        csv.push_str(&tabs);
+        if index + 1 == ROWS {
+            csv.push_str(&final_tabs);
+        }
+        csv.push('\n');
+    }
+    assert_eq!(csv.len(), CSV_BYTES);
+
+    let pool = test_pool().await;
+    let application = app::build(pool.clone());
+    let household = create_household(&application).await;
+    let account = create_account(&application, &household, "Full statement account").await;
+    let preview = preview_request(&csv);
+    assert!(preview.to_string().len() < 2 * CSV_BYTES);
+    let preview = send_json(
+        &application,
+        "POST",
+        &preview_path(&household, &account),
+        Some(preview),
+        StatusCode::OK,
+    )
+    .await;
+    let preview_rows = preview["rows"].as_array().unwrap();
+    assert_eq!(preview_rows.len(), ROWS);
+    assert!(preview_rows.iter().all(|row| row["status"] == "valid"));
+
+    let rows = preview_rows
+        .iter()
+        .map(|row| selection(i32::try_from(row["line"].as_u64().unwrap()).unwrap()))
+        .collect();
+    let confirmation = confirmation(&csv, Value::Array(rows));
+    assert!(confirmation.to_string().len() > 2 * CSV_BYTES);
+    let imported = send_json(
+        &application,
+        "POST",
+        &confirm_path(&household, &account),
+        Some(confirmation),
+        StatusCode::OK,
+    )
+    .await;
+    let imported_rows = imported["rows"].as_array().unwrap();
+    assert_eq!(imported_rows.len(), ROWS);
+    assert!(imported_rows.iter().all(|row| row["status"] == "imported"));
+
+    let stored: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM transactions WHERE account_id = $1 AND source = 'import'",
+    )
+    .bind(Uuid::parse_str(&account).unwrap())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stored, ROWS as i64);
+}
+
+#[tokio::test]
+async fn keeps_payload_limits_local_and_reports_problem_details() {
+    const MIB: usize = 1024 * 1024;
+    let application = app::build(
+        PgPoolOptions::new()
+            .connect_lazy("postgres://unused@127.0.0.1/unused")
+            .unwrap(),
+    );
+    for (path, limit) in [
+        (preview_path(UNKNOWN_ID, UNKNOWN_ID), 2 * MIB),
+        (confirm_path(UNKNOWN_ID, UNKNOWN_ID), 2 * MIB + MIB / 2),
+        ("/v1/households".to_owned(), 2 * MIB),
+    ] {
+        let problem = send_json(
+            &application,
+            "POST",
+            &path,
+            Some(json!({"padding": "x".repeat(limit)})),
+            StatusCode::PAYLOAD_TOO_LARGE,
+        )
+        .await;
+        assert_eq!(problem["code"], "payload_too_large");
+        assert_eq!(
+            problem["detail"],
+            "The request body exceeds the supported size."
+        );
+    }
+
+    let problem = send_json(
+        &application,
+        "POST",
+        &confirm_path(UNKNOWN_ID, UNKNOWN_ID),
+        Some(confirmation(&"x".repeat(MIB + 1), json!([selection(2)]))),
+        StatusCode::PAYLOAD_TOO_LARGE,
+    )
+    .await;
+    assert_eq!(problem["code"], "payload_too_large");
+    assert_eq!(
+        problem["detail"],
+        "The CSV text exceeds the supported size of 1 MiB."
+    );
+}
+
 fn confirm_path(household: &str, account: &str) -> String {
     format!("/v1/households/{household}/accounts/{account}/imports/csv/confirm")
 }
