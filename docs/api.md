@@ -139,7 +139,7 @@ Un compte archivé reste consultable mais ne peut plus être modifié ni recevoi
 ## Soldes de rapprochement
 
 - `POST /v1/households/{household_id}/accounts/{account_id}/balances` ajoute un solde daté ;
-- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien ;
+- `GET /v1/households/{household_id}/accounts/{account_id}/balances` retourne l'historique du plus récent au plus ancien pour un compte actif ou archivé ;
 - `PATCH /v1/households/{household_id}/accounts/{account_id}/balances/{balance_id}` corrige le montant, la date ou les deux.
 
 Le solde initial et chaque rapprochement doivent être antérieurs ou égaux à la date actuelle dans le fuseau du foyer. Un nouveau rapprochement doit aussi être strictement postérieur au dernier. Les erreurs de champ utilisent respectivement `balance_date_in_future` et `balance_date_not_after_latest`.

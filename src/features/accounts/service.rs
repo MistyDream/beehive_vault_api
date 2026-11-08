@@ -255,7 +255,7 @@ impl AccountService {
         household_id: HouseholdId,
         account_id: AccountId,
     ) -> Result<Vec<BalanceSnapshot>, ApiError> {
-        self.get_active(household_id, account_id).await?;
+        self.get(household_id, account_id).await?;
         Ok(self.repository.list_balances(account_id).await?)
     }
 

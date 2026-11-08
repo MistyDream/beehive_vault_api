@@ -142,6 +142,16 @@ async fn account_collections_archive_and_restore_follow_the_client_contract() {
         "expense",
     )
     .await;
+    let balances_uri =
+        format!("/v1/households/{household_id}/accounts/{empty_account_id}/balances");
+    let balances_before_archive = send_json(
+        &application,
+        "GET",
+        &balances_uri,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
     send_json(
         &application,
         "DELETE",
@@ -160,6 +170,41 @@ async fn account_collections_archive_and_restore_follow_the_client_contract() {
     )
     .await;
     assert!(archived_account["archivedAt"].is_string());
+
+    let balances = send_json(
+        &application,
+        "GET",
+        &balances_uri,
+        Value::Null,
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(balances, balances_before_archive);
+    assert_eq!(balances.as_array().unwrap().len(), 1);
+    let balance_id = balances[0]["id"].as_str().unwrap();
+    for (method, uri, body) in [
+        (
+            "POST",
+            balances_uri.clone(),
+            json!({ "amount": "1.00", "balanceDate": "2026-08-23" }),
+        ),
+        (
+            "PATCH",
+            format!("{balances_uri}/{balance_id}"),
+            json!({ "amount": "1.00" }),
+        ),
+        (
+            "GET",
+            format!(
+                "/v1/households/{}/accounts/{empty_account_id}/balances",
+                Uuid::now_v7()
+            ),
+            Value::Null,
+        ),
+    ] {
+        let problem = send_json(&application, method, &uri, body, StatusCode::NOT_FOUND).await;
+        assert_eq!(problem["code"], "account_not_found");
+    }
 
     let archived_update = send_json(
         &application,
