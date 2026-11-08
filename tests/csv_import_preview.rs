@@ -1,3 +1,6 @@
+#[path = "csv_import_preview/confirmation.rs"]
+mod confirmation;
+
 use std::env;
 
 use axum::{
@@ -7,7 +10,7 @@ use axum::{
 };
 use beehive_vault_api::app;
 use serde_json::{Value, json};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tower::ServiceExt;
 
 const UNKNOWN_ID: &str = "00000000-0000-0000-0000-000000000000";
@@ -264,6 +267,10 @@ fn preview_request(csv: &str) -> Value {
 }
 
 async fn test_application() -> Router {
+    app::build(test_pool().await)
+}
+
+async fn test_pool() -> PgPool {
     dotenvy::dotenv().ok();
     let database_url = env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must target an isolated test database");
@@ -276,7 +283,7 @@ async fn test_application() -> Router {
         .run(&pool)
         .await
         .expect("test migrations should succeed");
-    app::build(pool)
+    pool
 }
 
 async fn create_household(application: &Router) -> String {
@@ -329,14 +336,18 @@ async fn send_json(
         .oneshot(request.body(body).unwrap())
         .await
         .unwrap();
-    assert_eq!(response.status(), status, "{method} {path}");
-    if status.is_client_error() {
-        assert_eq!(
-            response.headers()[header::CONTENT_TYPE],
-            "application/problem+json"
-        );
-    }
+    let actual_status = response.status();
+    let content_type = response.headers().get(header::CONTENT_TYPE).cloned();
     let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    assert_eq!(
+        actual_status,
+        status,
+        "{method} {path}: {}",
+        String::from_utf8_lossy(&bytes)
+    );
+    if status.is_client_error() {
+        assert_eq!(content_type.unwrap(), "application/problem+json");
+    }
     if status == StatusCode::NO_CONTENT {
         assert!(bytes.is_empty());
         return Value::Null;

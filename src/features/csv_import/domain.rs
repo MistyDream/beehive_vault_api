@@ -1,10 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Range,
+};
 
 use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-use crate::features::transactions::domain::{TransactionLabel, TransactionNominalAmount};
+use crate::{
+    features::{
+        accounts::AccountKind,
+        transactions::domain::{
+            TransactionAmount, TransactionAmounts, TransactionEffect, TransactionLabel,
+            TransactionNature, TransactionNominalAmount,
+        },
+    },
+    types::TransactionId,
+};
 
 use super::reader::CsvReader;
 
@@ -177,7 +189,64 @@ pub(super) struct PreviewValues {
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct PreviewRow {
     pub line: usize,
+    pub source_range: Range<usize>,
     pub result: Result<PreviewValues, Vec<RowError>>,
+}
+
+pub(super) struct RowSelection {
+    pub line: i32,
+    pub nature: ImportNature,
+    pub effect: TransactionEffect,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ImportNature {
+    Income,
+    Expense,
+}
+
+impl From<ImportNature> for TransactionNature {
+    fn from(nature: ImportNature) -> Self {
+        match nature {
+            ImportNature::Income => Self::Income,
+            ImportNature::Expense => Self::Expense,
+        }
+    }
+}
+
+pub(super) struct SelectedRow<'a> {
+    pub selection: RowSelection,
+    pub values: PreviewValues,
+    pub source_record: &'a str,
+}
+
+impl SelectedRow<'_> {
+    pub fn account_amount(&self, account_kind: AccountKind) -> TransactionAmount {
+        let nominal = TransactionNominalAmount::new(self.values.signed_amount.abs())
+            .expect("the preview validated the nominal amount");
+        TransactionAmounts::from_input(
+            self.selection.nature.into(),
+            self.selection.effect,
+            nominal,
+            account_kind,
+        )
+        .expect("CSV selections are restricted to income and expense")
+        .account
+    }
+}
+
+pub(super) struct ImportedRow {
+    pub line: i32,
+    pub status: ImportStatus,
+    pub transaction_id: TransactionId,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ImportStatus {
+    Imported,
+    Duplicate,
 }
 
 pub(super) fn preview_rows(
@@ -231,6 +300,7 @@ pub(super) fn preview_rows(
         };
         rows.push(PreviewRow {
             line: record.line,
+            source_range: record.source_range,
             result,
         });
     }
@@ -269,6 +339,14 @@ mod tests {
         assert_eq!(first.booking_date, today());
         assert_eq!(first.label.as_str(), "Purchase; \"quoted\"\r\nreference");
         assert_eq!(first.signed_amount.to_string(), "-9999999999999999.9999");
+        assert_eq!(
+            &csv[rows[0].source_range.clone()],
+            "-9999999999999999,9999;01/09/2026;\"Purchase; \"\"quoted\"\"\r\nreference\";ignored"
+        );
+        assert_eq!(
+            &csv[rows[1].source_range.clone()],
+            "+42,50;31/08/2026;Deposit;ignored"
+        );
         assert_eq!(rows[1].line, 5);
         assert_eq!(
             rows[1].result.as_ref().unwrap().signed_amount.to_string(),

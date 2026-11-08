@@ -308,21 +308,25 @@ impl TransactionService {
             TransactionNature::Expense => TransactionDetails::Expense { category_id },
             TransactionNature::Transfer => unreachable!("transfers are rejected above"),
         };
-        let current_amounts = TransactionAmounts::from_stored(
-            current_nature,
-            transaction.amount,
-            current_account_kind,
-        )
-        .expect("a regular transaction always has ordinary amount semantics");
-        let nominal = command
-            .amount
-            .map(transaction_nominal_amount)
-            .transpose()?
-            .unwrap_or(current_amounts.nominal);
-        let effect = command.effect.unwrap_or(current_amounts.effect);
-        let amount = TransactionAmounts::from_input(nature, effect, nominal, account.kind)
-            .expect("transfers are rejected before ordinary amount derivation")
-            .account;
+        let amount = if transaction.source == TransactionSource::Import {
+            transaction.amount
+        } else {
+            let current_amounts = TransactionAmounts::from_stored(
+                current_nature,
+                transaction.amount,
+                current_account_kind,
+            )
+            .expect("a regular transaction always has ordinary amount semantics");
+            let nominal = command
+                .amount
+                .map(transaction_nominal_amount)
+                .transpose()?
+                .unwrap_or(current_amounts.nominal);
+            let effect = command.effect.unwrap_or(current_amounts.effect);
+            TransactionAmounts::from_input(nature, effect, nominal, account.kind)
+                .expect("transfers are rejected before ordinary amount derivation")
+                .account
+        };
 
         let transaction = self
             .transaction_repository

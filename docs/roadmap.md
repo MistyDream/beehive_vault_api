@@ -5,9 +5,9 @@ résultat utilisable, de PostgreSQL jusqu'à l'API ou à l'interface.
 
 ## État actuel
 
-- **Phase active :** phase 3 — Import CSV ;
-- **Dernière étape terminée :** 3.1 — Configuration et prévisualisation ;
-- **Prochaine étape :** 3.2 — Import et déduplication.
+- **Dernière phase terminée** — phase 3, Import CSV.
+- **Dernière étape terminée** — 3.2, Import et déduplication.
+- **Prochaine étape** — 4.1, Patrimoine.
 
 Légende :
 
@@ -127,7 +127,7 @@ patrimoine et obtenir un total consolidé par l'API.
 **Résultat attendu :** l'utilisateur peut maintenir ses finances au fil du
 temps et comprendre ses flux mensuels.
 
-## Phase 3 — Import CSV 🚧
+## Phase 3 — Import CSV ✅
 
 ### 3.1 — Configuration et prévisualisation ✅
 
@@ -137,15 +137,14 @@ temps et comprendre ses flux mensuels.
 
 Le [contrat de prévisualisation](api.md#prévisualisation-dun-relevé-csv) décrit les formats et les limites pris en charge.
 
-### 3.2 — Import et déduplication ⬜
+### 3.2 — Import et déduplication ✅
 
 - importer les transactions validées atomiquement ;
 - conserver les données bancaires sources ;
 - détecter les doublons ;
 - permettre la catégorisation après import.
 
-**Résultat attendu :** l'utilisateur peut intégrer un relevé réel sans tout
-ressaisir et sans créer de doublons.
+Le [contrat de confirmation](api.md#confirmation-dun-relevé-csv) décrit les résultats par ligne et la portée de la déduplication.
 
 ## Phase 4 — Tableau de bord du MVP ⬜
 

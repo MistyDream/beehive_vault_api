@@ -48,6 +48,12 @@ pub enum CreateBalanceOutcome {
     AccountNotFound,
 }
 
+pub enum UpdateAccountOutcome {
+    Updated,
+    NotFound,
+    KindChangeForbidden,
+}
+
 pub enum ArchiveAccountOutcome {
     Archived,
     NotFound,
@@ -268,19 +274,23 @@ impl AccountRepository {
         row.map(Account::try_from).transpose()
     }
 
-    pub async fn has_transactions(
-        &self,
+    pub(crate) async fn lock_active_kind(
+        connection: &mut PgConnection,
         household_id: HouseholdId,
         account_id: AccountId,
-    ) -> Result<bool, sqlx::Error> {
-        sqlx::query_scalar(
-            "SELECT EXISTS(SELECT 1 FROM transactions \
-             WHERE household_id = $1 AND account_id = $2)",
+    ) -> Result<Option<AccountKind>, sqlx::Error> {
+        sqlx::query_scalar::<_, String>(
+            "SELECT kind FROM accounts \
+             WHERE household_id = $1 AND id = $2 AND archived_at IS NULL FOR UPDATE",
         )
         .bind(household_id)
         .bind(account_id)
-        .fetch_one(self.database.pool())
-        .await
+        .fetch_optional(connection)
+        .await?
+        .as_deref()
+        .map(AccountKind::try_from)
+        .transpose()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))
     }
 
     pub async fn update(
@@ -291,8 +301,28 @@ impl AccountRepository {
         kind: Option<AccountKind>,
         institution_id: Option<InstitutionId>,
         remove_institution: bool,
-    ) -> Result<u64, sqlx::Error> {
-        let result = sqlx::query(
+    ) -> Result<UpdateAccountOutcome, sqlx::Error> {
+        let mut transaction = self.database.begin_transaction().await?;
+        let Some(current_kind) =
+            Self::lock_active_kind(&mut transaction, household_id, account_id).await?
+        else {
+            return Ok(UpdateAccountOutcome::NotFound);
+        };
+        if let Some(kind) = kind
+            && kind.is_liability() != current_kind.is_liability()
+        {
+            let has_transactions: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM transactions WHERE household_id = $1 AND account_id = $2)",
+            )
+            .bind(household_id)
+            .bind(account_id)
+            .fetch_one(&mut *transaction)
+            .await?;
+            if has_transactions {
+                return Ok(UpdateAccountOutcome::KindChangeForbidden);
+            }
+        }
+        sqlx::query(
             "UPDATE accounts SET \
          name = COALESCE($3, name), kind = COALESCE($4, kind), \
          institution_id = CASE WHEN $6 THEN NULL ELSE COALESCE($5, institution_id) END, \
@@ -304,9 +334,10 @@ impl AccountRepository {
         .bind(kind.map(AccountKind::as_str))
         .bind(institution_id)
         .bind(remove_institution)
-        .execute(self.database.pool())
+        .execute(&mut *transaction)
         .await?;
-        Ok(result.rows_affected())
+        transaction.commit().await?;
+        Ok(UpdateAccountOutcome::Updated)
     }
 
     pub async fn archive(
