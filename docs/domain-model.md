@@ -103,7 +103,7 @@ Le MVP fournit un petit catalogue initial et autorise la création, le renommage
 ## Import
 
 Un import représente le traitement d'un fichier externe pour un compte donné.
-Il conserve au minimum le nom du fichier, sa date, son résultat et les clés servant à empêcher les doublons.
+Chaque transaction issue d'un CSV conserve son nom de fichier, sa date de création, le numéro de ligne physique, l'enregistrement source brut et le montant signé du relevé. L'enregistrement brut inclut les retours à la ligne à l'intérieur des champs entre guillemets. La clé de déduplication combine le compte, l'empreinte du texte CSV exact et le numéro de ligne. La suppression logique conserve la clé et la provenance. La confirmation rapporte le résultat de chaque ligne sélectionnée.
 
 L'import doit proposer un aperçu avant validation. Une ligne invalide ne doit pas rendre les autres lignes incompréhensibles ou silencieusement incorrectes.
 

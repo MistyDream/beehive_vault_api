@@ -257,4 +257,62 @@ La réponse `200 OK` conserve l'ordre du fichier. `line` indique la première li
 
 Les erreurs de configuration ou de fichier entier donnent un Problem Details `422 validation_error`. Le détail de champ utilise `invalid_value` pour une configuration mal formée, `empty_column_mapping` ou `duplicate_column_mapping` pour une association invalide, `missing_csv_header` ou `invalid_csv_header` pour un en-tête absent ou ambigu, `missing_csv_column` pour une colonne demandée absente, `invalid_csv_syntax` pour une structure illisible et `csv_row_limit` pour un fichier dépassant le nombre d'enregistrements autorisé. Une erreur de structure dans un enregistrement peut rendre les lignes suivantes indéterminables, donc la réponse ne fournit aucun aperçu partiel dans ce cas. Le dépassement d'une limite de taille retourne `413 payload_too_large`.
 
-Un foyer inconnu retourne `404 household_not_found`. Un compte inconnu, archivé ou extérieur au foyer retourne `404 account_not_found`. L'import confirmé et la déduplication sont prévus à l'étape suivante.
+Un foyer inconnu retourne `404 household_not_found`. Un compte inconnu, archivé ou extérieur au foyer retourne `404 account_not_found`.
+
+## Confirmation d'un relevé CSV
+
+`POST /v1/households/{household_id}/accounts/{account_id}/imports/csv/confirm` reçoit à nouveau le texte `csv` et le `format` de prévisualisation, ainsi que le nom du fichier et les lignes que l'utilisateur confirme.
+
+```json
+{
+  "csv": "Booking;Description;Amount\n10/08/2026;Groceries;-12,3456\n11/08/2026;Deposit;0",
+  "format": {
+    "delimiter": "semicolon",
+    "dateFormat": "day_month_year",
+    "decimalSeparator": "comma",
+    "columns": {
+      "bookingDate": "Booking",
+      "label": "Description",
+      "amount": "Amount"
+    }
+  },
+  "fileName": "statement.csv",
+  "rows": [
+    { "line": 2, "nature": "expense", "effect": "standard" }
+  ]
+}
+```
+
+Chaque sélection désigne la première ligne physique d'un enregistrement valide. `nature` vaut `income` ou `expense` et `effect` vaut `standard` ou `reversal`. Ces deux choix sont requis. Le montant nominal est la valeur absolue du montant CSV. Le type du compte, la nature et l'effet déterminent le mouvement sur le compte selon les mêmes règles que pour une transaction manuelle.
+
+L'API revalide le relevé et toute la sélection. Un fichier invalide ou une ligne sélectionnée invalide annule la requête entière. Les lignes rejetées en prévisualisation peuvent être laissées hors de la sélection. Les écritures sont atomiques, y compris lorsqu'une erreur survient en base.
+
+La réponse `200 OK` contient un résultat par ligne dans l'ordre de la sélection.
+
+```json
+{
+  "accountId": "00000000-0000-0000-0000-000000000001",
+  "rows": [
+    {
+      "line": 2,
+      "status": "imported",
+      "transactionId": "00000000-0000-0000-0000-000000000002"
+    }
+  ]
+}
+```
+
+Le statut `duplicate` renvoie l'identifiant de la transaction déjà importée, même après sa suppression logique. La confirmation peut être répétée après un délai ou exécutée simultanément. Pour un même compte, l'identité combine le SHA-256 du texte CSV UTF-8 exact et le numéro de ligne physique. Changer le nom du fichier, l'ordre de la sélection ou sa classification ne change pas cette identité. Deux lignes de contenu identique à des positions différentes restent distinctes. Modifier les octets du texte, par exemple ses fins de ligne, crée un nouveau relevé. Des relevés différents peuvent donc importer des opérations qui se recouvrent.
+
+Les transactions sont créées sans catégorie avec l'origine `import`. La nature, la catégorie et la note sont modifiables par le parcours habituel des transactions. Le compte, la date bancaire, le libellé, le montant sur le compte et les données sources sont conservés. Une nouvelle nature peut changer l'effet affiché pour le même mouvement. La provenance interne conserve le nom du fichier, l'empreinte, le numéro de ligne, l'enregistrement CSV brut et son montant signé.
+
+Les limites CSV, les erreurs de format, les réponses `413` et les réponses `404` suivent les mêmes règles que pour la prévisualisation. Pour la sélection, le détail du Problem Details `422 validation_error` peut indiquer les codes suivants.
+
+| Code | Pointeur | Règle |
+|---|---|---|
+| `invalid_file_name` | `#/fileName` | Le nom doit contenir de 1 à 255 caractères après suppression des espaces aux extrémités et ne doit contenir aucun caractère de contrôle. |
+| `invalid_selection_size` | `#/rows` | Il faut sélectionner de 1 à 5 000 lignes. |
+| `duplicate_csv_selection` | `#/rows/{index}/line` | Une ligne ne peut apparaître qu'une seule fois dans la sélection. |
+| `csv_line_not_found` | `#/rows/{index}/line` | La ligne doit commencer un enregistrement de données. |
+| `rejected_csv_line` | `#/rows/{index}/line` | L'enregistrement sélectionné doit être valide. |
+| `invalid_value` | Champ concerné | Un champ de la sélection est absent ou invalide. |

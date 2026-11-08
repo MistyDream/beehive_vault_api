@@ -13,7 +13,9 @@ use super::{
         Account, AccountKind, AccountStatus, BalanceSnapshot, BalanceSource, NewAccount,
         NewBalanceSnapshot,
     },
-    repository::{AccountRepository, ArchiveAccountOutcome, CreateBalanceOutcome},
+    repository::{
+        AccountRepository, ArchiveAccountOutcome, CreateBalanceOutcome, UpdateAccountOutcome,
+    },
 };
 
 pub struct AccountTotals {
@@ -152,21 +154,6 @@ impl AccountService {
         account_id: AccountId,
         command: UpdateAccountCommand,
     ) -> Result<Account, ApiError> {
-        if let Some(kind) = command.kind {
-            let current = self.get_active(household_id, account_id).await?;
-            if kind.is_liability() != current.kind.is_liability()
-                && self
-                    .repository
-                    .has_transactions(household_id, account_id)
-                    .await?
-            {
-                return Err(
-                    ApiError::new(ProblemKind::AccountKindChangeForbidden).with_detail(
-                        "An account with transactions cannot switch between asset and liability.",
-                    ),
-                );
-            }
-        }
         let name = command
             .name
             .map(|name| required_text(name, "name"))
@@ -174,7 +161,7 @@ impl AccountService {
         if !command.remove_institution {
             self.validate_institution(command.institution_id).await?;
         }
-        let affected = self
+        match self
             .repository
             .update(
                 household_id,
@@ -184,11 +171,17 @@ impl AccountService {
                 command.institution_id,
                 command.remove_institution,
             )
-            .await?;
-        if affected == 0 {
-            return Err(ApiError::new(ProblemKind::AccountNotFound));
+            .await?
+        {
+            UpdateAccountOutcome::Updated => self.get_active(household_id, account_id).await,
+            UpdateAccountOutcome::NotFound => Err(ApiError::new(ProblemKind::AccountNotFound)),
+            UpdateAccountOutcome::KindChangeForbidden => Err(ApiError::new(
+                ProblemKind::AccountKindChangeForbidden,
+            )
+            .with_detail(
+                "An account with transactions cannot switch between asset and liability.",
+            )),
         }
-        self.get_active(household_id, account_id).await
     }
 
     pub async fn archive(

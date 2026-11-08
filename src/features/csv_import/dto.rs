@@ -4,16 +4,72 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::ApiError,
-    types::{AccountId, CurrencyCode},
+    features::transactions::domain::TransactionEffect,
+    types::{AccountId, CurrencyCode, TransactionId},
 };
 
-use super::domain::{Column, CsvFormat, PreviewError, PreviewRow, PreviewValues, RowError};
+use super::domain::{
+    Column, CsvFormat, ImportNature, ImportStatus, ImportedRow, PreviewError, PreviewRow,
+    PreviewValues, RowError, RowSelection,
+};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PreviewRequest {
     pub csv: String,
     pub format: CsvFormat,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct ConfirmRequest {
+    pub csv: String,
+    pub format: CsvFormat,
+    pub file_name: String,
+    pub rows: Vec<RowSelectionRequest>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct RowSelectionRequest {
+    line: i32,
+    nature: ImportNature,
+    effect: TransactionEffect,
+}
+
+impl From<RowSelectionRequest> for RowSelection {
+    fn from(row: RowSelectionRequest) -> Self {
+        Self {
+            line: row.line,
+            nature: row.nature,
+            effect: row.effect,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ConfirmResponse {
+    pub account_id: AccountId,
+    pub rows: Vec<ImportedRowResponse>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ImportedRowResponse {
+    line: i32,
+    status: ImportStatus,
+    transaction_id: TransactionId,
+}
+
+impl From<ImportedRow> for ImportedRowResponse {
+    fn from(row: ImportedRow) -> Self {
+        Self {
+            line: row.line,
+            status: row.status,
+            transaction_id: row.transaction_id,
+        }
+    }
 }
 
 #[derive(Serialize)]
