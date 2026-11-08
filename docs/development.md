@@ -81,6 +81,7 @@ cargo test --test household_listing -- --ignored
 cargo test --test financial_foundation -- --ignored
 cargo test --test category_management -- --ignored
 cargo test --test transaction_management -- --ignored
+cargo test --test csv_import_preview -- --ignored
 cargo test --test transfer_management -- --ignored
 cargo test --test calculated_balance -- --ignored
 cargo test --test balance_lifecycle -- --ignored

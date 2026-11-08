@@ -190,3 +190,71 @@ Le rapport expose les bornes du mois, la devise du foyer, les revenus, les dépe
 Le rapport utilise l'effet économique dérivé de la nature et de `effect`, indépendamment de la famille actif ou dette du compte. Les opérations `reversal` peuvent donc réduire le total d'une section ou d'une catégorie. Les transferts et les transactions supprimées sont exclus. Les comptes et catégories archivés restent inclus dans l'historique.
 
 Les transactions sources d'un total sont consultées avec la collection des transactions et les mêmes bornes, nature et catégorie. Le filtre `uncategorized=true` permet de retrouver les sources du groupe sans catégorie.
+
+## Prévisualisation d'un relevé CSV
+
+`POST /v1/households/{household_id}/accounts/{account_id}/imports/csv/preview` analyse un relevé pour un compte actif du foyer. La prévisualisation n'enregistre ni fichier, ni configuration, ni transaction et ne modifie aucun solde.
+
+Le corps `application/json` contient le texte CSV UTF-8 et les paramètres à appliquer à ce fichier :
+
+```json
+{
+  "csv": "Booking;Description;Amount\n10/08/2026;Groceries;-12,3456\n11/08/2026;Deposit;0",
+  "format": {
+    "delimiter": "semicolon",
+    "dateFormat": "day_month_year",
+    "decimalSeparator": "comma",
+    "columns": {
+      "bookingDate": "Booking",
+      "label": "Description",
+      "amount": "Amount"
+    }
+  }
+}
+```
+
+| Paramètre | Valeurs prises en charge |
+|---|---|
+| `delimiter` | `comma`, `semicolon` ou `tab`. |
+| `dateFormat` | `year_month_day` pour `AAAA-MM-JJ`, `day_month_year` pour `JJ/MM/AAAA` ou `month_day_year` pour `MM/JJ/AAAA`. Les zéros initiaux sont requis. |
+| `decimalSeparator` | `dot` ou `comma`. Un montant contient des chiffres ASCII, un signe facultatif et jusqu'à quatre décimales. Les séparateurs de milliers et la notation scientifique sont exclus. |
+| `columns` | Noms des trois en-têtes distincts à associer à `bookingDate`, `label` et `amount`. Les espaces aux extrémités des noms sont ignorés. La casse reste significative. |
+
+Le premier enregistrement non vide est l'en-tête. Les autres colonnes sont ignorées, mais chaque enregistrement de données doit avoir le même nombre de champs que l'en-tête. Le CSV accepte les fins de ligne LF ou CRLF, un BOM UTF-8 initial, les champs entre guillemets avec séparateurs ou retours à la ligne et les guillemets doublés. Les lignes physiques vides hors des champs entre guillemets sont ignorées. Le texte CSV est limité à 1 Mio et à 5 000 enregistrements de données. La limite de 2 Mio s'applique au corps JSON complet.
+
+La réponse `200 OK` conserve l'ordre du fichier. `line` indique la première ligne physique de chaque enregistrement à partir de 1. Un en-tête valide sans données donne `rows: []`.
+
+```json
+{
+  "accountId": "00000000-0000-0000-0000-000000000001",
+  "currency": "EUR",
+  "rows": [
+    {
+      "status": "valid",
+      "line": 2,
+      "bookingDate": "2026-08-10",
+      "label": "Groceries",
+      "signedAmount": "-12.3456"
+    },
+    {
+      "status": "rejected",
+      "line": 3,
+      "errors": [{ "code": "invalid_amount", "field": "amount" }]
+    }
+  ]
+}
+```
+
+`currency` est la devise du compte. `signedAmount` est une chaîne décimale exacte qui conserve le signe du fichier et normalise le séparateur en point. Ce signe ne détermine pas encore la nature du mouvement, son effet économique ni l'effet sur le solde. La date est normalisée en `AAAA-MM-JJ` et le libellé est débarrassé des espaces aux extrémités. Chaque ligne rejetée expose les erreurs applicables sans recopier le texte source.
+
+| Code de ligne | Champ | Règle |
+|---|---|---|
+| `column_count_mismatch` | Aucun | Le nombre de champs diffère de celui de l'en-tête. |
+| `invalid_date` | `bookingDate` | La valeur ne correspond pas à une date du format configuré. |
+| `date_in_future` | `bookingDate` | La date est postérieure à la date courante dans le fuseau du foyer. |
+| `invalid_length` | `label` | Le libellé normalisé doit contenir entre 1 et 500 caractères. |
+| `invalid_amount` | `amount` | Le montant est invalide, nul ou dépasse la limite de 16 chiffres entiers et 4 décimales. |
+
+Les erreurs de configuration ou de fichier entier donnent un Problem Details `422 validation_error`. Le détail de champ utilise `invalid_value` pour une configuration mal formée, `empty_column_mapping` ou `duplicate_column_mapping` pour une association invalide, `missing_csv_header` ou `invalid_csv_header` pour un en-tête absent ou ambigu, `missing_csv_column` pour une colonne demandée absente, `invalid_csv_syntax` pour une structure illisible et `csv_row_limit` pour un fichier dépassant le nombre d'enregistrements autorisé. Une erreur de structure dans un enregistrement peut rendre les lignes suivantes indéterminables, donc la réponse ne fournit aucun aperçu partiel dans ce cas. Le dépassement d'une limite de taille retourne `413 payload_too_large`.
+
+Un foyer inconnu retourne `404 household_not_found`. Un compte inconnu, archivé ou extérieur au foyer retourne `404 account_not_found`. L'import confirmé et la déduplication sont prévus à l'étape suivante.

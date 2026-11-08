@@ -6,8 +6,8 @@ résultat utilisable, de PostgreSQL jusqu'à l'API ou à l'interface.
 ## État actuel
 
 - **Phase active :** phase 3 — Import CSV ;
-- **Dernière étape terminée :** 2.6 — Flux mensuels ;
-- **Prochaine étape :** 3.1 — Configuration et prévisualisation.
+- **Dernière étape terminée :** 3.1 — Configuration et prévisualisation ;
+- **Prochaine étape :** 3.2 — Import et déduplication.
 
 Légende :
 
@@ -127,13 +127,15 @@ patrimoine et obtenir un total consolidé par l'API.
 **Résultat attendu :** l'utilisateur peut maintenir ses finances au fil du
 temps et comprendre ses flux mensuels.
 
-## Phase 3 — Import CSV ⬜
+## Phase 3 — Import CSV 🚧
 
-### 3.1 — Configuration et prévisualisation ⬜
+### 3.1 — Configuration et prévisualisation ✅
 
 - configurer le format d'un relevé ;
 - analyser le fichier sans modifier les données ;
 - présenter les lignes valides et rejetées avant confirmation.
+
+Le [contrat de prévisualisation](api.md#prévisualisation-dun-relevé-csv) décrit les formats et les limites pris en charge.
 
 ### 3.2 — Import et déduplication ⬜
 
