@@ -33,16 +33,16 @@ Ce document indique ce que le produit sait faire aujourd'hui, ce qui est en cour
 | Transferts | Modification et suppression atomiques | Les deux mouvements sont toujours traités ensemble |
 | Flux mensuels | Revenus, dépenses, flux net et ventilation par catégorie | Un rapport porte sur un seul mois civil |
 | Flux mensuels | Accès aux transactions sources de chaque total | Réutilise la liste paginée des transactions et ses filtres |
+| Import CSV | Configuration du format et prévisualisation des lignes valides ou rejetées | Analyse en lecture seule d'un relevé par compte actif |
 
 ## En développement
 
-Aucune fonctionnalité produit n'est actuellement en développement. Le prochain lot de l'API est la prévisualisation CSV.
+Aucune fonctionnalité produit n'est actuellement en développement. Le prochain lot de l'API est l'import CSV confirmé avec déduplication.
 
 ## Prévues
 
 | Étape | Fonctionnalité | Objectif |
 |---|---|---|
-| 3.1 | Prévisualisation CSV | Vérifier un relevé et ses erreurs avant import |
 | 3.2 | Import CSV | Importer sans doublons et conserver les données bancaires sources |
 | 4.1 | Tableau de bord du patrimoine | Afficher le patrimoine actuel et son évolution |
 | 4.2 | Tableau de bord des flux | Afficher les revenus, dépenses et catégories du mois |

@@ -297,3 +297,5 @@ Tous les lots du contrat sont disponibles :
 2. validations de date et correction des soldes : disponibles ;
 3. comptes archivés, restauration et sous-totaux : disponibles ;
 4. collection consolidée, montants, résumés incorporés et pagination : disponible.
+
+La [prévisualisation CSV](api.md#prévisualisation-dun-relevé-csv) est également disponible. Le client configure les colonnes et formats à chaque requête. Il peut distinguer les lignes valides et rejetées des erreurs qui empêchent tout aperçu. Le résultat ne fournit aucun identifiant de confirmation et son montant signé ne préjuge pas de l'effet comptable final.
