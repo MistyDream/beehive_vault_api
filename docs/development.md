@@ -70,6 +70,10 @@ Le fichier fourni contient un catalogue initial adapté à une installation fran
 
 Une absence dans le fichier ne supprime jamais une entrée de la base et un changement de nom dans le fichier ne la renomme pas. Utiliser la commande `rename` avec l'UUID existant pour conserver les références des comptes. Aucun import n'est exécuté automatiquement au démarrage de l'API.
 
+## Données de démonstration
+
+Le [jeu de démonstration reproductible](demo-data.md) fournit trois mois de données synthétiques, les totaux attendus et un relevé CSV à importer. Les commandes explicites `beehive_vault_admin demo load` et `demo reset` permettent de le charger et de le remettre à zéro sur une base isolée.
+
 ## Vérifications locales
 
 ```bash
@@ -77,6 +81,7 @@ cargo fmt --all -- --check
 cargo check --all-targets
 cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
+cargo test --test demo_dataset -- --ignored
 cargo test --test household_listing -- --ignored
 cargo test --test financial_foundation -- --ignored
 cargo test --test category_management -- --ignored
