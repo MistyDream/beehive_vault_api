@@ -1,6 +1,7 @@
 pub mod accounts;
 pub mod categories;
 pub mod csv_import;
+pub mod demo;
 pub mod health;
 pub mod households;
 pub mod institutions;

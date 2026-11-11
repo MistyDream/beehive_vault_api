@@ -3,7 +3,10 @@ use std::{error::Error, fs, path::PathBuf};
 use beehive_vault_api::{
     config::Settings,
     database::Database,
-    features::institutions::admin::{InstitutionAdminService, InstitutionCatalog},
+    features::{
+        demo::{DEMO_HOUSEHOLD_ID, DemoRepository},
+        institutions::admin::{InstitutionAdminService, InstitutionCatalog},
+    },
     types::InstitutionId,
 };
 use clap::{Parser, Subcommand};
@@ -19,11 +22,24 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Load or remove the fixed synthetic demonstration household.
+    Demo {
+        #[command(subcommand)]
+        command: DemoCommand,
+    },
     /// Manage the global financial institution catalog.
     Institutions {
         #[command(subcommand)]
         command: InstitutionCommand,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum DemoCommand {
+    /// Load the fixtures once, preserving an existing demonstration household.
+    Load,
+    /// Remove only the demonstration household and its unused demo institutions.
+    Reset,
 }
 
 #[derive(Debug, Subcommand)]
@@ -60,8 +76,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
     sqlx::migrate!().run(&pool).await?;
 
-    let service = InstitutionAdminService::new(Database::new(pool));
+    let database = Database::new(pool);
+    let service = InstitutionAdminService::new(database.clone());
     match cli.command {
+        Command::Demo { command } => {
+            let demo = DemoRepository::new(database);
+            let changed = match command {
+                DemoCommand::Load => demo.load().await?,
+                DemoCommand::Reset => demo.reset().await?,
+            };
+            println!("Demo household {DEMO_HOUSEHOLD_ID}: changed={changed}");
+        }
         Command::Institutions { command } => run_institution_command(&service, command).await?,
     }
 
